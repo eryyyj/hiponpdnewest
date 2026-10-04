@@ -271,11 +271,11 @@ PAGE_STYLE = """
   .status-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; margin-right: 5px; background: #dc3545; }
   .status-dot.on { background: #28a745; }
 
-  #shrimpTargetModal, #powerModal, #calibrationModal, #roiModal, #manualFeedModal {
+  #shrimpTargetModal, #powerModal, #calibrationModal, #roiModal, #manualFeedModal, #secretFeedModal {
     display: none; position: fixed; inset: 0; z-index: 1080;
     background: rgba(17, 24, 39, 0.6); align-items: center; justify-content: center;
   }
-  #shrimpTargetModal.show, #powerModal.show, #calibrationModal.show, #roiModal.show, #manualFeedModal.show {
+  #shrimpTargetModal.show, #powerModal.show, #calibrationModal.show, #roiModal.show, #manualFeedModal.show, #secretFeedModal.show {
     display: flex !important;
   }
   #shrimpTargetModal .modal-dialog, #powerModal .modal-dialog, #calibrationModal .modal-dialog, #roiModal .modal-dialog, #manualFeedModal .modal-dialog {
@@ -303,7 +303,6 @@ PAGE_STYLE = """
 </style>
 """
 
-# Navigation tabs: "Controls" and "Gallery"
 NAV_TABS = [
     ("controls", "/controls", "Controls"),
     ("gallery", "/gallery", "Gallery"),
@@ -311,11 +310,10 @@ NAV_TABS = [
 
 
 def render_nav_links(active):
-    # Brand Tab acting as Home/Dashboard link
     dashboard_active = "active font-weight-bold text-dark" if active == "camera" else "text-dark"
     brand_tab = f"""
     <li class="nav-item mr-3">
-      <a class="nav-link d-flex align-items-center {dashboard_active}" href="/">
+      <a class="nav-link d-flex align-items-center {dashboard_active}" href="/" id="secretFeedToggle" title="Double click for developer feed">
         <img src="/assets/ShrimpSenseLogo.png" alt="ShrimpSense" onerror="this.src='/assets/images/ShrimpSenseLogo.png'" style="height: 32px; width: auto;" class="mr-2">
         <strong style="font-size:1.15rem;">ShrimpSense Dashboard</strong>
       </a>
@@ -1831,6 +1829,8 @@ class CameraManager:
         self._cycle_lock = threading.Lock()
         self._burst_lock = threading.Lock()
         self._burst_running = False
+        self._live_lock = threading.Lock()
+        self._live_feed_enabled = False
         self._frame_lock = threading.Lock()
         self._roi_lock = threading.Lock()
         self._roi = dict(DEFAULT_ROI)
@@ -1868,6 +1868,26 @@ class CameraManager:
     def is_bursting(self):
         with self._burst_lock:
             return self._burst_running
+
+    def live_feed_enabled(self):
+        with self._live_lock:
+            return self._live_feed_enabled
+
+    def set_live_feed(self, enabled):
+        with self._live_lock:
+            self._live_feed_enabled = bool(enabled)
+            requested = self._live_feed_enabled
+        if requested and automation_mgr.is_running():
+            return False
+        return requested
+
+    def live_feed_status(self):
+        enabled = self.live_feed_enabled() and not automation_mgr.is_running()
+        return {
+            "enabled": enabled,
+            "automation_running": automation_mgr.is_running(),
+            "available": self.available,
+        }
 
     def _grab_bgr(self):
         with self._frame_lock:
@@ -2177,6 +2197,24 @@ class LatestFrame:
 
 
 latest_frame = LatestFrame()
+CAMERA_CAPTURE_FPS = 15
+
+
+def camera_capture_loop():
+    interval = 1.0 / CAMERA_CAPTURE_FPS
+    while True:
+        if not camera_mgr.available:
+            time.sleep(0.5)
+            continue
+        try:
+            if camera_mgr.live_feed_enabled() and not automation_mgr.is_running():
+                if not camera_mgr.pump_preview():
+                    time.sleep(0.2)
+                    continue
+        except Exception:
+            time.sleep(0.5)
+            continue
+        time.sleep(interval)
 
 
 def encode_jpeg(img, quality=85):
@@ -2202,6 +2240,38 @@ flask_app = Flask(
     static_folder="assets",
     static_url_path="/assets",
 )
+
+
+def _generate_mjpeg():
+    interval = 1.0 / 12
+    last_version = -1
+    while True:
+        frame_bytes, version = latest_frame.get_jpeg()
+        if frame_bytes is None or version == last_version:
+            time.sleep(0.05)
+            continue
+        last_version = version
+        yield (b"--frame\r\n"
+               b"Content-Type: image/jpeg\r\n\r\n" + frame_bytes + b"\r\n")
+        time.sleep(interval)
+
+
+@flask_app.route("/video_feed")
+def video_feed():
+    return Response(_generate_mjpeg(), mimetype="multipart/x-mixed-replace; boundary=frame")
+
+
+@flask_app.route("/api/live_feed", methods=["GET"])
+def api_live_feed_get():
+    return jsonify(camera_mgr.live_feed_status())
+
+
+@flask_app.route("/api/live_feed", methods=["POST"])
+def api_live_feed_set():
+    data = request.get_json(silent=True) or {}
+    wanted = bool(data.get("enabled")) if "enabled" in data else not camera_mgr.live_feed_enabled()
+    enabled = camera_mgr.set_live_feed(wanted)
+    return jsonify({"ok": True, "enabled": enabled, **camera_mgr.live_feed_status()})
 
 
 @flask_app.route("/api/ports", methods=["GET"])
@@ -2530,6 +2600,9 @@ if __name__ == "__main__":
 
     flask_thread = threading.Thread(target=run_flask, daemon=True)
     flask_thread.start()
+
+    camera_thread = threading.Thread(target=camera_capture_loop, daemon=True)
+    camera_thread.start()
 
     time.sleep(1.5)
 

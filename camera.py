@@ -2,10 +2,9 @@
 Camera page (/) - ShrimpSense Aquaculture Dashboard
 - Plain white process status display
 - Clean all-black metrics: Target PL Shrimp Count, Counted Shrimp, Total Biomass, Recommended Feed
-- Dual Run Controls:
-    * "Start" (continuous counting without target)
-    * "Set Target" (panel target counting mode with Confirm & Start)
+- Dual Run Controls: "Start" (continuous) and "Set Target" (panel target mode)
 - "Feed Simulator" modal
+- Hidden Developer Live Feed Modal (Double-click ShrimpSense Dashboard brand title in navbar to activate)
 """
 
 from flask import Blueprint, Response
@@ -144,6 +143,21 @@ CAMERA_BODY = """
     </div>
   </div>
 </div>
+
+<!-- Secret Developer Live Feed Modal -->
+<div class="modal" id="secretFeedModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered" style="max-width: 680px; width: 95%;">
+    <div class="modal-content shadow-lg border-0 bg-dark text-white" style="border-radius:12px; overflow: hidden;">
+      <div class="modal-header border-0 py-2 px-3 d-flex justify-content-between align-items-center" style="background:#111827;">
+        <span class="small font-weight-bold text-muted">DEV STREAM INSPECTOR</span>
+        <button type="button" class="close text-white" id="secretFeedClose" aria-label="Close" style="opacity: 0.8;"><span>&times;</span></button>
+      </div>
+      <div class="modal-body p-0 text-center bg-black" style="min-height: 480px; display: flex; align-items: center; justify-content: center;">
+        <img id="secretVideoFeed" src="" alt="Developer Feed" style="max-width: 100%; height: auto; display: block; margin: 0 auto;">
+      </div>
+    </div>
+  </div>
+</div>
 """
 
 CAMERA_EXTRA_BODY = """
@@ -179,9 +193,14 @@ const manualFeedVal = document.getElementById('manualFeedVal');
 const btnManualDispense = document.getElementById('btnManualDispense');
 const btnManualStop = document.getElementById('btnManualStop');
 
+const secretFeedModal = document.getElementById('secretFeedModal');
+const secretFeedClose = document.getElementById('secretFeedClose');
+const secretVideoFeed = document.getElementById('secretVideoFeed');
+
 let flushRunning = false;
 let currentCounted = 0;
 
+// Dynamic Decimal Precision:
 function formatSmartGrams(val) {
   const n = Number(val);
   if (!Number.isFinite(n) || n === 0) return '0.00 g';
@@ -209,6 +228,7 @@ function updateMainMetrics(counted) {
   displayRecommendedFeed.textContent = formatSmartGrams(calcRawFeed(currentCounted));
 }
 
+// Feed Simulator Modal
 function updateManualCalculator() {
   const count = parseInt(manualShrimpInput.value, 10) || 0;
   manualBiomassVal.textContent = formatSmartGrams(calcRawBiomass(count));
@@ -243,6 +263,46 @@ if (btnManualClear) {
   });
 }
 
+// Secret Developer Live Feed Logic
+function openSecretFeed() {
+  if (!secretFeedModal) return;
+  fetch('/api/live_feed', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ enabled: true })
+  }).catch(() => {});
+  secretVideoFeed.src = '/video_feed';
+  secretFeedModal.classList.add('show');
+}
+
+function closeSecretFeed() {
+  if (!secretFeedModal) return;
+  secretVideoFeed.src = '';
+  secretFeedModal.classList.remove('show');
+  fetch('/api/live_feed', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ enabled: false })
+  }).catch(() => {});
+}
+
+// Listen to double clicks/taps on the brand title in the top navbar
+const brandSecretToggle = document.getElementById('secretFeedToggle');
+if (brandSecretToggle) {
+  brandSecretToggle.addEventListener('dblclick', (e) => {
+    e.preventDefault();
+    openSecretFeed();
+  });
+}
+
+if (secretFeedClose) secretFeedClose.addEventListener('click', closeSecretFeed);
+if (secretFeedModal) {
+  secretFeedModal.addEventListener('click', (e) => {
+    if (e.target === secretFeedModal) closeSecretFeed();
+  });
+}
+
+// Loop Start Buttons
 if (cameraStartContinuousBtn) {
   cameraStartContinuousBtn.addEventListener('click', async () => {
     if (automationRunning || flushRunning) return;
@@ -254,9 +314,7 @@ if (cameraStartContinuousBtn) {
         body: JSON.stringify({ target_count: null })
       });
       const data = await res.json();
-      if (!data.ok) {
-        alert(data.error || 'Could not start counting loop');
-      }
+      if (!data.ok) alert(data.error || 'Could not start counting loop');
     } catch (e) {
       alert('Error starting counting loop');
     }
@@ -281,6 +339,7 @@ if (cameraCancelLoopBtn) {
   });
 }
 
+// Dispensing Handlers
 if (btnDispenseAuto) {
   btnDispenseAuto.addEventListener('click', async () => {
     if (currentCounted <= 0) {
