@@ -25,14 +25,15 @@ Pillow
 opencv-python
 
 # Ultralytics YOLO (.pt weights). Installs torch as a dependency.
-ultralytics
+# (Commented out for Windows UI-only development to save space and avoid heavy compilation)
+# ultralytics
 
 # picamera2 JPEG / DNG helpers (needed when picamera2 is installed via pip)
-simplejpeg
-piexif
-pidng
+# simplejpeg
+# piexif
+# pidng
 
 # Raspberry Pi AI Camera. Prefer apt python3-picamera2 on the Pi.
 # pip may fail or conflict with libcamera; install.sh falls back to apt.
-picamera2
+# picamera2
 # python-prctl  # Pi only; requires apt libcap-dev
