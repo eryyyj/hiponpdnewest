@@ -340,7 +340,6 @@ if (btnManualStop) {
   btnManualStop.addEventListener('click', async () => {
     try {
       await fetch('/api/feed/stop', { method: 'POST' });
-      dispenseStatusText.textContent = 'Dispenser stopped.';
     } catch(e) {}
     btnDispenseAuto.disabled = false;
     btnManualDispense.disabled = false;
