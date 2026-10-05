@@ -167,183 +167,108 @@ PAGE_STYLE = """
     --shrimp-orange: #F1691F;
     --marine-dark: #0f172a;
     --marine-light: #f8fafc;
-    --panel-border: #cbd5e1;
   }
 
-  * { box-sizing: border-box; }
-
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    background-color: #f1f5f9;
-    color: #0f172a;
+  html, body {
+    font-family: 'Lato', sans-serif;
+    background-color: #f4f8fa;
+    color: #111827;
     margin: 0;
     padding: 0;
+    height: 100%;
     overflow: hidden;
-    user-select: none;
-    -webkit-user-select: none;
   }
 
-  /* Compact Industrial Header (No "Dashboard" in Title) */
-  .hmi-header {
-    height: 56px;
-    background: #ffffff;
-    border-bottom: 2px solid var(--panel-border);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 14px;
+  .content-wrapper {
+    background-color: #f4f8fa;
+    position: relative;
   }
+
+  .wrapper { background-color: #f4f8fa; }
+
+  /* Restored Navbar Styling */
+  .main-header {
+    height: 56px;
+    background-color: #ffffff;
+    border-bottom: 1px solid #dee2e6;
+  }
+
   .hmi-brand {
     display: flex;
     align-items: center;
-    gap: 8px;
-    text-decoration: none;
-    color: #0f172a !important;
     cursor: pointer;
-  }
-  .hmi-brand img {
-    height: 30px;
-    width: auto;
-  }
-  .hmi-brand-title {
-    font-size: 1.25rem;
-    font-weight: 900;
-    letter-spacing: -0.3px;
-  }
-
-  .hmi-nav-pills {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin: 0;
-    padding: 0;
-    list-style: none;
-  }
-  .hmi-nav-btn {
-    height: 38px;
-    padding: 0 14px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.95rem;
-    font-weight: 700;
-    border-radius: 6px;
     text-decoration: none !important;
-    border: 1px solid #cbd5e1;
-    background: #f8fafc;
-    color: #334155 !important;
-    touch-action: manipulation;
-  }
-  .hmi-nav-btn.active {
-    background: #0f172a;
-    color: #ffffff !important;
-    border-color: #0f172a;
   }
 
-  .hmi-hardware-group {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-  .hmi-select {
-    height: 38px;
-    font-weight: 700;
-    font-size: 0.9rem;
-    padding: 2px 8px;
-    border: 1px solid #cbd5e1;
-    border-radius: 6px;
-    background: #f8fafc;
-    color: #0f172a;
-  }
+  .gallery-item { cursor: pointer; }
+  .gallery-item img { width: 100%; height: 120px; object-fit: cover; border-radius: 4px; }
+  .gallery-item .caption { font-size: 11px; color: #111827; margin-top: 2px; }
 
-  .hmi-btn-sm {
-    height: 38px;
-    padding: 0 12px;
-    font-size: 0.9rem;
-    font-weight: 700;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 6px;
-    border: 1px solid transparent;
-    cursor: pointer;
-    touch-action: manipulation;
+  .lightbox {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.9);
+    display: flex; align-items: center; justify-content: center; z-index: 1050;
   }
+  .lightbox.hidden { display: none; }
+  .lightbox img { max-width: 92%; max-height: 82%; border-radius: 6px; }
+  .lightbox .lightbox-close { position: absolute; top: 16px; right: 24px; font-size: 32px; color: #fff; cursor: pointer; }
+  .lightbox .lightbox-caption { position: absolute; bottom: 24px; left: 0; right: 0; text-align: center; color: #ddd; font-size: 12px; }
 
-  .status-dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    background: #ef4444;
-    display: inline-block;
-  }
-  .status-dot.on { background: #22c55e; }
+  .status-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; margin-right: 5px; background: #dc3545; }
+  .status-dot.on { background: #28a745; }
 
-  /* Modals Standard: 24px Outer Padding, 16px Section Spacing, 12px Control Gap */
+  /* Modals */
   #shrimpTargetModal, #powerModal, #calibrationModal, #roiModal, #manualFeedModal, #developerModeModal {
     display: none; position: fixed; inset: 0; z-index: 1080;
-    background: rgba(15, 23, 42, 0.7); align-items: center; justify-content: center;
+    background: rgba(17, 24, 39, 0.6); align-items: center; justify-content: center;
   }
   #shrimpTargetModal.show, #powerModal.show, #calibrationModal.show, #roiModal.show, #manualFeedModal.show, #developerModeModal.show {
     display: flex !important;
   }
-  #powerModal .modal-dialog, #calibrationModal .modal-dialog, #roiModal .modal-dialog {
-    margin: 0; max-width: 460px; width: 94%;
-  }
 
+  /* Restored ROI Modal styles */
   .roi-preview { position: relative; width: 100%; background: #111; border-radius: 4px; overflow: hidden; margin-bottom: 10px; }
   .roi-preview img { display: block; width: 100%; height: auto; }
-  .roi-box { position: absolute; border: 3px solid var(--shrimp-orange); box-shadow: 0 0 0 9999px rgba(0,0,0,0.45); pointer-events: none; }
+  .roi-box { position: absolute; border: 3px solid #ffc800; box-shadow: 0 0 0 9999px rgba(0,0,0,0.45); pointer-events: none; }
   .roi-slider-label { display: flex; justify-content: space-between; font-weight: 700; margin-top: 4px; }
 
-  /* On-screen Keypad */
+  /* OSK */
   #osk {
     display: none; position: fixed; left: 0; right: 0; bottom: 0; z-index: 2000;
-    background: #0f172a; padding: 12px; box-shadow: 0 -6px 20px rgba(0,0,0,0.4);
+    background: #111827; padding: 10px 12px 14px; box-shadow: 0 -6px 18px rgba(0,0,0,0.35);
   }
   #osk.show { display: block; }
-  #osk .osk-keys { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; max-width: 440px; margin: 0 auto; }
+  #osk .osk-keys { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; max-width: 420px; margin: 0 auto; }
   #osk .osk-wide { grid-column: span 2; }
   #osk button {
-    min-height: 52px; font-size: 24px; font-weight: 700; border: 0; border-radius: 8px;
-    background: #334155; color: #fff;
+    min-height: 48px; font-size: 22px; font-weight: 700; border: 0; border-radius: 8px;
+    background: #2C3E50; color: #fff;
   }
-  #osk button.osk-action { background: #475569; }
+  #osk button.osk-action { background: #566573; }
   #osk button.osk-ok { background: var(--shrimp-red); }
 </style>
 """
 
-def render_header(active):
-    controls_active = "active" if active == "controls" else ""
-    gallery_active = "active" if active == "gallery" else ""
-    
-    return f"""
-    <header class="hmi-header">
-      <div class="d-flex align-items-center">
-        <!-- Double click logo/title opens Hidden Developer Mode -->
-        <a class="hmi-brand mr-3" href="javascript:void(0)" id="secretFeedToggle" title="Double click for developer inspection">
-          <img src="/assets/ShrimpSenseLogo.png" alt="ShrimpSense" onerror="this.src='/assets/images/ShrimpSenseLogo.png'">
-          <span class="hmi-brand-title">ShrimpSense</span>
-        </a>
-        <ul class="hmi-nav-pills">
-          <li><a class="hmi-nav-btn {controls_active}" href="/controls">Controls</a></li>
-          <li><a class="hmi-nav-btn {gallery_active}" href="/gallery">Gallery</a></li>
-          <li><button id="calibrationBtn" class="hmi-nav-btn">Calibration</button></li>
-          <li><button id="roiBtn" class="hmi-nav-btn">ROI</button></li>
-        </ul>
-      </div>
+NAV_TABS = [
+    ("controls", "/controls", "Controls"),
+    ("gallery", "/gallery", "Gallery"),
+]
 
-      <div class="hmi-hardware-group">
-        <select id="portSelect" class="hmi-select"></select>
-        <button id="refreshBtn" class="hmi-btn-sm btn-light border" title="Refresh ports">&#8635;</button>
-        <button id="connectBtn" class="hmi-btn-sm btn-success">Connect</button>
-        <div class="d-flex align-items-center ml-1 mr-2">
-          <span id="statusDot" class="status-dot"></span>
-        </div>
-        <button id="shutdownBtn" class="hmi-btn-sm btn-outline-danger">Power</button>
-      </div>
-    </header>
+def render_nav_links(active):
+    dashboard_active = "active font-weight-bold text-dark" if active == "camera" else "text-dark"
+    brand_tab = f"""
+    <li class="nav-item mr-3">
+      <a class="nav-link d-flex align-items-center {dashboard_active} hmi-brand" href="/" id="secretFeedToggle" title="Double click for developer feed">
+        <img src="/assets/ShrimpSenseLogo.png" alt="ShrimpSense" onerror="this.src='/assets/images/ShrimpSenseLogo.png'" style="height: 30px; width: auto;" class="mr-2">
+        <strong style="font-size:1.25rem;">ShrimpSense</strong>
+      </a>
+    </li>
     """
+    
+    links = [brand_tab]
+    for key, href, label in NAV_TABS:
+        cls = "nav-link active font-weight-bold text-dark" if key == active else "nav-link font-weight-bold text-muted"
+        links.append(f'<li class="nav-item"><a class="{cls}" href="{href}">{label}</a></li>')
+    return "\n        ".join(links)
 
 
 COMMON_SCRIPT = """
@@ -371,14 +296,15 @@ async function refreshStatus(){
   const data = await res.json();
   const btn = document.getElementById('connectBtn');
   const dot = document.getElementById('statusDot');
+  const text = document.getElementById('statusText');
   if (data.connected){
     btn.textContent = 'Disconnect';
-    btn.className = 'hmi-btn-sm btn-danger';
-    dot.classList.add('on');
+    btn.classList.remove('btn-success'); btn.classList.add('btn-danger');
+    dot.classList.add('on'); if(text) text.textContent = 'Connected: ' + data.port;
   } else {
     btn.textContent = 'Connect';
-    btn.className = 'hmi-btn-sm btn-success';
-    dot.classList.remove('on');
+    btn.classList.remove('btn-danger'); btn.classList.add('btn-success');
+    dot.classList.remove('on'); if(text) text.textContent = 'Disconnected';
   }
 }
 
@@ -503,7 +429,7 @@ if (document.getElementById('calibrationModalSave')){
 const DEVICE_LABELS = { relay1:'Pump', relay2:'Feeder', servo1:'Gate 1', servo2:'Gate 2' };
 let automationRunning = false;
 
-// ROI Modal
+// Restored ROI Logic
 const roiModal = document.getElementById('roiModal');
 const roiSliders = {
   left: document.getElementById('roiLeft'),
@@ -605,7 +531,6 @@ if (roiModal){
   }
 }
 
-// Touchscreen OSK for fallback inputs
 const osk = document.getElementById('osk');
 let oskTarget = null;
 
@@ -682,102 +607,130 @@ def render_page(active, body, page_script, extra_body="", full_height=False):
 <meta http-equiv="Cache-Control" content="no-store">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>ShrimpSense</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/admin-lte@3.2.0/dist/css/adminlte.min.css">
 {PAGE_STYLE}
 </head>
-<body>
-<div class="hmi-viewport">
+<body class="hold-transition layout-top-nav">
+<div class="wrapper">
 
-  {render_header(active)}
+  <!-- Restored Original Bootstrap Navbar with Native Buttons -->
+  <nav class="main-header navbar navbar-expand navbar-white navbar-light border-bottom px-2 shadow-sm">
+    <div class="container-fluid">
+      <ul class="navbar-nav align-items-center">
+        {render_nav_links(active)}
+        <li class="nav-item ml-2">
+          <button id="calibrationBtn" class="btn btn-outline-secondary btn-sm mr-1 font-weight-bold text-dark">Calibration</button>
+          <button id="roiBtn" class="btn btn-outline-secondary btn-sm font-weight-bold text-dark">ROI</button>
+        </li>
+      </ul>
 
-  <main class="hmi-content-container">
-    {body}
-  </main>
+      <ul class="navbar-nav ml-auto align-items-center flex-nowrap">
+        <li class="nav-item px-1">
+          <select id="portSelect" class="custom-select custom-select-sm text-dark font-weight-bold" style="width:auto;"></select>
+        </li>
+        <li class="nav-item px-1">
+          <button id="refreshBtn" class="btn btn-sm btn-outline-secondary text-dark font-weight-bold" title="Refresh ports">&#8635;</button>
+        </li>
+        <li class="nav-item px-1">
+          <button id="connectBtn" class="btn btn-sm btn-success font-weight-bold">Connect</button>
+        </li>
+        <li class="nav-item px-2 d-flex align-items-center">
+          <span id="statusDot" class="status-dot"></span>
+          <small id="statusText" class="text-dark font-weight-bold d-none d-md-inline">Disconnected</small>
+        </li>
+        <li class="nav-item px-1">
+          <button id="shutdownBtn" class="btn btn-sm btn-outline-danger font-weight-bold" title="Power">&#9211; Power</button>
+        </li>
+      </ul>
+    </div>
+  </nav>
+
+  <div class="content-wrapper">
+    <div class="content pt-1 pb-2">
+      <div class="container-fluid">
+        {body}
+      </div>
+    </div>
+  </div>
 
 </div>
 
-<!-- Calibration Modal -->
+<!-- Restored Original Calibration Modal -->
 <div class="modal" id="calibrationModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content hmi-modal-box">
-      <div class="hmi-modal-titlebar">
-        <h5 class="hmi-dialog-title">System Calibration</h5>
+    <div class="modal-content shadow border-0" style="border-radius:12px;">
+      <div class="modal-header border-bottom">
+        <h5 class="modal-title font-weight-bold text-dark">Calibration</h5>
         <button type="button" class="close" id="calibrationModalClose" aria-label="Close"><span>&times;</span></button>
       </div>
-      <div class="hmi-modal-body">
-        <div>
-          <label for="calibConfidence" class="hmi-metric-label">Detection Confidence</label>
-          <input id="calibConfidence" type="text" class="form-control text-dark font-weight-bold" placeholder="0.437">
-        </div>
-        <div>
-          <label for="calibFeederMultiplier" class="hmi-metric-label">Feeder Multiplier</label>
-          <input id="calibFeederMultiplier" type="text" class="form-control text-dark font-weight-bold" placeholder="0.15">
-        </div>
-        <div>
-          <label for="calibShrimpWeight" class="hmi-metric-label">Single Shrimp Weight (g)</label>
-          <input id="calibShrimpWeight" type="text" class="form-control text-dark font-weight-bold" placeholder="0.00333">
-        </div>
-        <div>
-          <label for="calibFeederPulse" class="hmi-metric-label">Feeder Pulse Duration (s)</label>
-          <input id="calibFeederPulse" type="text" class="form-control text-dark font-weight-bold" placeholder="5">
-        </div>
-        <div>
-          <label for="calibFlushPump" class="hmi-metric-label">Flush Duration (s)</label>
-          <input id="calibFlushPump" type="text" class="form-control text-dark font-weight-bold" placeholder="10">
-        </div>
+      <div class="modal-body">
+        <label for="calibConfidence" class="text-dark font-weight-bold">Confidence level</label>
+        <input id="calibConfidence" type="text" inputmode="none" autocomplete="off" class="form-control mb-2 text-dark font-weight-bold" placeholder="0.55">
+        <label for="calibFeederMultiplier" class="text-dark font-weight-bold">Feeder multiplier</label>
+        <input id="calibFeederMultiplier" type="text" inputmode="none" autocomplete="off" class="form-control mb-2 text-dark font-weight-bold" placeholder="15">
+        <label for="calibShrimpWeight" class="text-dark font-weight-bold">Weight of shrimp (g)</label>
+        <input id="calibShrimpWeight" type="text" inputmode="none" autocomplete="off" class="form-control mb-2 text-dark font-weight-bold" placeholder="0.00333">
+        <label for="calibFeederPulse" class="text-dark font-weight-bold">R2 ON / feeder duration each turn (s)</label>
+        <input id="calibFeederPulse" type="text" inputmode="none" autocomplete="off" class="form-control mb-2 text-dark font-weight-bold" placeholder="5">
+        <label for="calibFlushPump" class="text-dark font-weight-bold">Flush pump duration (s)</label>
+        <input id="calibFlushPump" type="text" inputmode="none" autocomplete="off" class="form-control mb-2 text-dark font-weight-bold" placeholder="10">
       </div>
-      <div class="hmi-modal-actions mt-3">
-        <button type="button" class="hmi-touch-btn hmi-btn-neutral flex-fill" id="calibrationModalCancel">Cancel</button>
-        <button type="button" class="hmi-touch-btn hmi-btn-primary flex-fill" id="calibrationModalSave">Save</button>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary font-weight-bold" id="calibrationModalCancel">Cancel</button>
+        <button type="button" class="btn btn-primary font-weight-bold" id="calibrationModalSave">Save</button>
       </div>
     </div>
   </div>
 </div>
 
-<!-- ROI Modal -->
+<!-- Restored Original ROI Modal -->
 <div class="modal" id="roiModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content hmi-modal-box">
-      <div class="hmi-modal-titlebar">
-        <h5 class="hmi-dialog-title">Region of Interest (ROI)</h5>
+    <div class="modal-content shadow border-0" style="border-radius:12px;">
+      <div class="modal-header border-bottom">
+        <h5 class="modal-title font-weight-bold text-dark">ROI</h5>
         <button type="button" class="close" id="roiModalClose" aria-label="Close"><span>&times;</span></button>
       </div>
-      <div class="hmi-modal-body">
+      <div class="modal-body">
         <div class="roi-preview">
           <img id="roiPreviewImg" alt="Camera preview">
           <div class="roi-box" id="roiBox"></div>
         </div>
-        <div class="roi-slider-label text-dark font-weight-bold"><span>Left</span><span id="roiLeftVal">0%</span></div>
+        <div class="roi-slider-label text-dark font-weight-bold"><span>Left edge</span><span id="roiLeftVal">0%</span></div>
         <input type="range" id="roiLeft" min="0" max="95" step="1" value="0" class="custom-range">
-        <div class="roi-slider-label text-dark font-weight-bold"><span>Right</span><span id="roiRightVal">0%</span></div>
+        <div class="roi-slider-label text-dark font-weight-bold"><span>Right edge</span><span id="roiRightVal">0%</span></div>
         <input type="range" id="roiRight" min="0" max="95" step="1" value="0" class="custom-range">
-        <div class="roi-slider-label text-dark font-weight-bold"><span>Top</span><span id="roiTopVal">0%</span></div>
+        <div class="roi-slider-label text-dark font-weight-bold"><span>Top edge</span><span id="roiTopVal">0%</span></div>
         <input type="range" id="roiTop" min="0" max="95" step="1" value="0" class="custom-range">
-        <div class="roi-slider-label text-dark font-weight-bold"><span>Bottom</span><span id="roiBottomVal">0%</span></div>
+        <div class="roi-slider-label text-dark font-weight-bold"><span>Bottom edge</span><span id="roiBottomVal">0%</span></div>
         <input type="range" id="roiBottom" min="0" max="95" step="1" value="0" class="custom-range">
+        <small class="text-muted d-block mb-2 font-weight-bold">Each slider trims that side of the camera view. Only shrimp whose center is inside the box are counted in a burst.</small>
       </div>
-      <div class="hmi-modal-actions mt-3">
-        <button type="button" class="btn btn-outline-secondary font-weight-bold text-dark" id="roiResetBtn">Reset</button>
-        <button type="button" class="hmi-touch-btn hmi-btn-neutral flex-fill" id="roiModalCancel">Cancel</button>
-        <button type="button" class="hmi-touch-btn hmi-btn-primary flex-fill" id="roiSaveBtn">Save</button>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary mr-auto font-weight-bold text-dark" id="roiResetBtn">Reset</button>
+        <button type="button" class="btn btn-secondary font-weight-bold" id="roiModalCancel">Cancel</button>
+        <button type="button" class="btn btn-warning font-weight-bold" id="roiSaveBtn">Save as default</button>
       </div>
     </div>
   </div>
 </div>
 
-<!-- Power Modal -->
+<!-- Restored Original Power Modal -->
 <div class="modal" id="powerModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content hmi-modal-box">
-      <div class="hmi-modal-titlebar">
-        <h5 class="hmi-dialog-title">System Power</h5>
+    <div class="modal-content shadow border-0" style="border-radius:12px;">
+      <div class="modal-header border-bottom">
+        <h5 class="modal-title font-weight-bold text-dark">Power</h5>
         <button type="button" class="close" id="powerModalClose" aria-label="Close"><span>&times;</span></button>
       </div>
-      <div class="hmi-modal-body">
-        <p class="text-dark font-weight-bold mb-1">Choose system action:</p>
-        <button type="button" id="powerExitAppBtn" class="hmi-touch-btn hmi-btn-neutral w-100 py-3 mb-2">Exit Touchscreen Kiosk</button>
-        <button type="button" id="powerShutdownPiBtn" class="hmi-touch-btn hmi-btn-danger w-100 py-3 mb-2">Shutdown Raspberry Pi</button>
-        <button type="button" id="powerModalCancel" class="hmi-touch-btn hmi-btn-secondary w-100 py-2">Cancel</button>
+      <div class="modal-body">
+        <p class="mb-3 text-dark font-weight-bold">Choose how to stop this session.</p>
+        <button type="button" id="powerExitAppBtn" class="btn btn-secondary btn-block font-weight-bold py-2 mb-2">Exit desktop app</button>
+        <button type="button" id="powerShutdownPiBtn" class="btn btn-danger btn-block font-weight-bold py-2 mb-2">Shutdown Raspberry Pi</button>
+        <button type="button" id="powerModalCancel" class="btn btn-outline-secondary btn-block font-weight-bold py-2">Cancel</button>
       </div>
     </div>
   </div>
@@ -785,7 +738,7 @@ def render_page(active, body, page_script, extra_body="", full_height=False):
 
 {extra_body}
 
-<!-- Touch Numpad (Global Fallback) -->
+<!-- Touch Numpad (Global OSK) -->
 <div id="osk" aria-hidden="true">
   <div class="osk-keys">
     <button type="button" data-osk="1">1</button>
@@ -1766,7 +1719,6 @@ class CameraManager:
         self._frame_is_bgr = True
         self._fallback_id = 10000
 
-        # Dataset Recording
         self._dev_recording = False
         self._dev_video_writer = None
         self._dev_rec_lock = threading.Lock()

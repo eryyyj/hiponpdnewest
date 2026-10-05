@@ -1,19 +1,18 @@
 """
-Camera page (/) - ShrimpSense Industrial Touchscreen HMI
-- Shared 42px baseline band: Manual Mode button height & styling locked to Left Telemetry footer
-- Matching 1px solid #cbd5e1 border and 6px border-radius across bottom row
-- 10px tight grouping between Dispense Feed (50px) and Manual Mode (42px)
-- Strict 22px bottom padding alignment across both primary panels
+Camera page (/) - ShrimpSense Aquaculture Dashboard
+- Left Stage with action row and bottom status/clock footer
+- Right panel with metrics and bottom-anchored Dispense Feed + Manual Mode action group
+- Developer dataset collection modal accessible via double-clicking brand title
 """
 
 from flask import Blueprint, Response
 
 CAMERA_BODY = """
 <div class="hmi-dashboard">
-  <!-- Left Side: Vision/Process Stage, 4 Action Buttons, Telemetry Bar -->
+  <!-- Left Side: Stage, 4 Action Buttons, Status Footer -->
   <section class="hmi-panel hmi-panel-left">
     
-    <!-- Process Stage Area (60% Vertical Workspace) -->
+    <!-- Process Stage Area -->
     <div class="hmi-card hmi-stage-card" id="processDisplayArea">
       <div class="stage-centerpiece">
         <div id="processStatusMain" class="stage-headline">System Ready</div>
@@ -21,7 +20,7 @@ CAMERA_BODY = """
       </div>
     </div>
 
-    <!-- 4 High-Target Industrial Machine Buttons -->
+    <!-- 4 Machine Action Buttons -->
     <div class="hmi-action-row">
       <button id="cameraStartContinuousBtn" class="hmi-touch-btn hmi-btn-primary">
         Start
@@ -37,7 +36,7 @@ CAMERA_BODY = """
       </button>
     </div>
 
-    <!-- Machine Telemetry Footer (Baseline Anchor: 42px Height) -->
+    <!-- Left Footer: Status + Clock -->
     <footer class="hmi-telemetry-bar">
       <div id="cameraAutomationStatus" class="telemetry-status">
         <span class="telemetry-tag">STATUS:</span> <span class="telemetry-val">Idle</span>
@@ -49,24 +48,21 @@ CAMERA_BODY = """
 
   </section>
 
-  <!-- Right Side: Two Sections Only (Information Section + Bottom-Anchored Action Section) -->
+  <!-- Right Side: Metrics & Bottom-Anchored Actions -->
   <section class="hmi-panel hmi-panel-right">
     
-    <!-- Section 1: Information Section (Absorbs available space) -->
+    <!-- Information Section -->
     <div class="hmi-info-section">
-      <!-- Card 1: Target Shrimp Count -->
       <div class="hmi-card hmi-metric-card">
         <div class="hmi-metric-label">TARGET SHRIMP COUNT</div>
         <div class="hmi-metric-value" id="displayTargetCount">None</div>
       </div>
 
-      <!-- Card 2: Counted Shrimp -->
       <div class="hmi-card hmi-metric-card">
         <div class="hmi-metric-label">COUNTED SHRIMP</div>
         <div class="hmi-metric-value" id="displayCountedShrimp">0</div>
       </div>
 
-      <!-- Card 3: Total Biomass & Recommended Feed (Equal Height & Width) -->
       <div class="hmi-metric-grid">
         <div class="hmi-card hmi-metric-card-split">
           <div class="hmi-metric-label">TOTAL BIOMASS</div>
@@ -78,16 +74,14 @@ CAMERA_BODY = """
         </div>
       </div>
 
-      <!-- Live Dispense Status Text (Kept inside info flow, never between buttons) -->
       <div id="dispenseStatusText" class="hmi-dispense-feedback"></div>
     </div>
 
-    <!-- Section 2: Action Section (Anchored to the absolute bottom of right panel) -->
+    <!-- Action Section: Anchored to Bottom -->
     <div class="hmi-action-section">
       <button type="button" id="btnDispenseAuto" class="hmi-touch-btn hmi-btn-primary hmi-btn-dispense">
         Dispense Feed
       </button>
-      <!-- Manual Mode matches height (42px), radius (6px), and border with Left Telemetry Footer -->
       <button type="button" id="btnOpenManualModal" class="hmi-touch-btn hmi-btn-secondary hmi-btn-manual">
         Manual Mode
       </button>
@@ -96,27 +90,20 @@ CAMERA_BODY = """
   </section>
 </div>
 
-<!-- ========================================== -->
-<!-- Target PL Shrimp Count Modal with Keypad   -->
-<!-- ========================================== -->
+<!-- Target PL Shrimp Count Modal -->
 <div class="modal" id="shrimpTargetModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered" style="max-width: 440px; width: 95%;">
-    <div class="modal-content hmi-modal-box">
-      <!-- Title -->
-      <div class="hmi-modal-titlebar">
-        <h5 class="hmi-dialog-title">Target Shrimp Count</h5>
+    <div class="modal-content shadow border-0" style="border-radius:12px; padding:20px;">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5 class="font-weight-bold text-dark m-0">Target Shrimp Count</h5>
         <button type="button" class="close" id="shrimpModalClose" aria-label="Close"><span>&times;</span></button>
       </div>
 
-      <div class="hmi-modal-body">
-        <!-- Input Field -->
-        <div>
-          <label for="shrimpTargetInput" class="hmi-metric-label mb-1">Set Desired Count</label>
-          <input type="text" inputmode="none" autocomplete="off" class="form-control hmi-dialog-input" id="shrimpTargetInput" placeholder="0" readonly>
-        </div>
+      <div>
+        <label for="shrimpTargetInput" class="hmi-metric-label mb-1">Set Desired Count</label>
+        <input type="text" inputmode="none" autocomplete="off" class="form-control text-center font-weight-bold text-dark mb-3" style="font-size:1.6rem; height:48px;" id="shrimpTargetInput" placeholder="0" readonly>
 
-        <!-- Inline Keypad (Elevated closer to active input) -->
-        <div class="hmi-dialog-keypad">
+        <div class="hmi-dialog-keypad mb-3">
           <button type="button" class="hmi-key-btn" data-val="1">1</button>
           <button type="button" class="hmi-key-btn" data-val="2">2</button>
           <button type="button" class="hmi-key-btn" data-val="3">3</button>
@@ -131,40 +118,34 @@ CAMERA_BODY = """
           <button type="button" class="hmi-key-btn hmi-key-fn" id="targetKeyBack">&#9003;</button>
         </div>
 
-        <!-- Action Buttons -->
-        <div class="hmi-modal-actions">
-          <button type="button" class="hmi-touch-btn hmi-btn-neutral flex-fill" id="shrimpModalCancel" style="height:48px;">Cancel</button>
-          <button type="button" class="hmi-touch-btn hmi-btn-primary flex-fill" id="shrimpModalSubmit" style="height:48px;">Confirm &amp; Start</button>
+        <div class="d-flex" style="gap:10px;">
+          <button type="button" class="btn btn-secondary font-weight-bold flex-fill py-2" id="shrimpModalCancel">Cancel</button>
+          <button type="button" class="btn btn-danger font-weight-bold flex-fill py-2" id="shrimpModalSubmit">Confirm &amp; Start</button>
         </div>
       </div>
     </div>
   </div>
 </div>
 
-<!-- ========================================== -->
-<!-- Manual Mode Modal (Feed Simulator)        -->
-<!-- ========================================== -->
+<!-- Manual Mode Modal -->
 <div class="modal" id="manualFeedModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered" style="max-width: 480px; width: 95%;">
-    <div class="modal-content hmi-modal-box">
-      <div class="hmi-modal-titlebar">
-        <h5 class="hmi-dialog-title">Manual Feed Simulation</h5>
+    <div class="modal-content shadow border-0" style="border-radius:12px; padding:20px;">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5 class="font-weight-bold text-dark m-0">Manual Feed Simulation</h5>
         <button type="button" class="close" id="manualFeedModalClose" aria-label="Close"><span>&times;</span></button>
       </div>
 
-      <div class="hmi-modal-body">
-        <div>
-          <label for="manualShrimpInput" class="hmi-metric-label mb-1">Enter Shrimp Count</label>
-          <div class="input-group">
-            <input id="manualShrimpInput" type="text" inputmode="none" autocomplete="off" class="form-control hmi-dialog-input" placeholder="0">
-            <div class="input-group-append">
-              <button class="btn btn-outline-secondary font-weight-bold px-3" type="button" id="btnManualClear">Clear</button>
-            </div>
+      <div>
+        <label for="manualShrimpInput" class="hmi-metric-label mb-1">Enter Shrimp Count</label>
+        <div class="input-group mb-3">
+          <input id="manualShrimpInput" type="text" inputmode="none" autocomplete="off" class="form-control text-center font-weight-bold text-dark" style="font-size:1.5rem; height:48px;" placeholder="0">
+          <div class="input-group-append">
+            <button class="btn btn-outline-secondary font-weight-bold px-3" type="button" id="btnManualClear">Clear</button>
           </div>
         </div>
 
-        <!-- Perfectly Aligned Dual Split Cards -->
-        <div class="hmi-metric-grid">
+        <div class="hmi-metric-grid mb-3">
           <div class="hmi-card hmi-metric-card-split bg-light">
             <div class="hmi-metric-label">Total Biomass</div>
             <div id="manualBiomassVal" class="hmi-metric-value-sm">0.00 g</div>
@@ -175,12 +156,11 @@ CAMERA_BODY = """
           </div>
         </div>
 
-        <!-- Cohesive Action Group (Identical 50px Height) -->
-        <div class="hmi-modal-actions mt-1">
-          <button type="button" id="btnManualDispense" class="hmi-touch-btn hmi-btn-primary flex-fill" style="height: 50px;">
+        <div class="d-flex" style="gap:10px;">
+          <button type="button" id="btnManualDispense" class="btn btn-danger flex-fill font-weight-bold py-2" style="height:48px;">
             Dispense Feed
           </button>
-          <button type="button" id="btnManualStop" class="hmi-touch-btn hmi-btn-danger flex-fill" style="height: 50px;">
+          <button type="button" id="btnManualStop" class="btn btn-outline-danger flex-fill font-weight-bold py-2" style="height:48px;">
             Stop
           </button>
         </div>
@@ -189,23 +169,19 @@ CAMERA_BODY = """
   </div>
 </div>
 
-<!-- ============================================================== -->
-<!-- Hidden Developer Mode Modal (Industrial Diagnostic Layout)     -->
-<!-- ============================================================== -->
+<!-- Developer Mode Modal -->
 <div class="modal" id="developerModeModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered" style="max-width: 1240px; width: 98%; height: 95%;">
-    <div class="modal-content hmi-modal-box d-flex flex-column h-100 p-0 overflow-hidden bg-dark text-white border-secondary">
+    <div class="modal-content d-flex flex-column h-100 p-0 overflow-hidden bg-dark text-white border-secondary" style="border-radius:12px;">
       
-      <!-- Top Diagnostic Header -->
       <div class="d-flex justify-content-between align-items-center px-3 py-2 bg-black border-bottom border-secondary" style="height: 42px;">
         <div class="d-flex align-items-center">
           <span class="status-dot" id="devRecDot" style="background:#64748b;"></span>
-          <span class="small font-weight-bold ml-2 text-light" style="letter-spacing: 0.5px;">DIAGNOSTIC &bull; SHRIMP CV DATASET STUDIO</span>
+          <span class="small font-weight-bold ml-2 text-light">DIAGNOSTIC &bull; SHRIMP CV DATASET STUDIO</span>
         </div>
         <span class="small font-weight-bold text-muted">Raspberry Pi Hardware Camera Inspector</span>
       </div>
 
-      <!-- Large Live Camera Viewport (80-85% Height) -->
       <div class="dev-stream-viewport">
         <img id="devVideoFeed" src="" alt="Developer Feed" class="dev-stream-img">
         <div id="devFeedFallback" class="text-muted text-center" style="display:none;">
@@ -214,47 +190,37 @@ CAMERA_BODY = """
         </div>
       </div>
 
-      <!-- Uniform Grid-Aligned Diagnostic Footer Panel -->
       <div class="dev-footer-panel">
-        
-        <!-- Left Group: 4 Symmetrical Telemetry Diagnostic Cards -->
         <div class="dev-telemetry-grid">
-          
           <div class="dev-stat-card">
             <span class="dev-stat-label">RECORDING STATUS</span>
             <div class="dev-stat-value" id="devRecordingStatusText">● Idle</div>
           </div>
-
           <div class="dev-stat-card">
             <span class="dev-stat-label">ELAPSED TIME</span>
             <div class="dev-stat-value font-monospace" id="devRecordTimer">00:00</div>
           </div>
-
           <div class="dev-stat-card">
             <span class="dev-stat-label">STORAGE REMAINING</span>
             <div class="dev-stat-value" id="devStorageRemaining">14.8 GB</div>
           </div>
-
           <div class="dev-stat-card">
             <span class="dev-stat-label">VIDEOS RECORDED</span>
             <div class="dev-stat-value" id="devVideosRecorded">0</div>
           </div>
-
         </div>
 
-        <!-- Right Group: Diagnostic Action Buttons -->
         <div class="dev-actions-cluster">
-          <button type="button" id="btnDevStartRecord" class="hmi-touch-btn hmi-btn-primary dev-action-btn">
+          <button type="button" id="btnDevStartRecord" class="btn btn-danger font-weight-bold dev-action-btn">
             Start Recording
           </button>
-          <button type="button" id="btnDevStopRecord" class="hmi-touch-btn hmi-btn-neutral dev-action-btn" disabled>
+          <button type="button" id="btnDevStopRecord" class="btn btn-secondary font-weight-bold dev-action-btn" disabled>
             Stop Recording
           </button>
-          <button type="button" id="btnExitDevMode" class="hmi-touch-btn hmi-btn-secondary dev-action-btn">
+          <button type="button" id="btnExitDevMode" class="btn btn-outline-light font-weight-bold dev-action-btn">
             Exit
           </button>
         </div>
-
       </div>
 
     </div>
@@ -265,14 +231,13 @@ CAMERA_BODY = """
 CAMERA_EXTRA_BODY = """
 <div id="captureToast" class="alert alert-success shadow"></div>
 <style>
-/* Root HMI Dashboard: 18px top margin, 22px bottom buffer across both panels */
 .hmi-dashboard {
   display: flex;
   flex-direction: row;
   height: calc(100vh - 74px);
   max-height: calc(100vh - 74px);
   gap: 14px;
-  padding: 18px 10px 22px 10px;
+  padding: 16px 10px 22px 10px;
   overflow: hidden;
   box-sizing: border-box;
 }
@@ -286,8 +251,6 @@ CAMERA_EXTRA_BODY = """
   flex: 5.8;
   gap: 12px;
 }
-
-/* Right Panel: Clean two-section column */
 .hmi-panel-right {
   flex: 4.2;
   display: flex;
@@ -295,7 +258,6 @@ CAMERA_EXTRA_BODY = """
   height: 100%;
 }
 
-/* Section 1: Info section holding all metrics */
 .hmi-info-section {
   display: flex;
   flex-direction: column;
@@ -303,16 +265,14 @@ CAMERA_EXTRA_BODY = """
   width: 100%;
 }
 
-/* Section 2: Action group anchored to the absolute bottom */
 .hmi-action-section {
-  margin-top: auto; /* Pushes button pair flush to the bottom */
+  margin-top: auto;
   display: flex;
   flex-direction: column;
-  gap: 10px; /* Exact 10px spacing between Dispense Feed and Manual Mode */
+  gap: 10px;
   width: 100%;
 }
 
-/* Base Industrial Card */
 .hmi-card {
   background: #ffffff;
   border: 1px solid #d1d5db;
@@ -320,7 +280,6 @@ CAMERA_EXTRA_BODY = """
   box-shadow: 0 1px 3px rgba(0,0,0,0.06);
 }
 
-/* 60% Left Panel Video/Stage Container */
 .hmi-stage-card {
   flex: 6 1 0;
   min-height: 0;
@@ -349,7 +308,6 @@ CAMERA_EXTRA_BODY = """
   margin-top: 6px;
 }
 
-/* Machine Controls Row */
 .hmi-action-row {
   display: flex;
   flex-direction: row;
@@ -370,41 +328,18 @@ CAMERA_EXTRA_BODY = """
   touch-action: manipulation;
   transition: filter 0.15s ease, transform 0.05s ease;
 }
-.hmi-touch-btn:active {
-  transform: scale(0.98);
-}
-.hmi-action-row .hmi-touch-btn {
-  flex: 1;
-  height: 100%;
-}
+.hmi-touch-btn:active { transform: scale(0.98); }
+.hmi-action-row .hmi-touch-btn { flex: 1; height: 100%; }
 
-/* Industrial Action Button Styling */
-.hmi-btn-primary {
-  background: var(--shrimp-red);
-  color: #ffffff;
-  border-color: #b91c1c;
-}
+.hmi-btn-primary { background: var(--shrimp-red); color: #ffffff; border-color: #b91c1c; }
 .hmi-btn-primary:active { background: #991b1b; }
-.hmi-btn-accent {
-  background: var(--shrimp-orange);
-  color: #ffffff;
-  border-color: #ea580c;
-}
+.hmi-btn-accent { background: var(--shrimp-orange); color: #ffffff; border-color: #ea580c; }
 .hmi-btn-accent:active { background: #c2410c; }
-.hmi-btn-danger {
-  background: #ffffff;
-  color: #dc2626;
-  border: 2px solid #ef4444;
-}
+.hmi-btn-danger { background: #ffffff; color: #dc2626; border: 2px solid #ef4444; }
 .hmi-btn-danger:active { background: #fee2e2; }
-.hmi-btn-neutral {
-  background: #ffffff;
-  color: #0f172a;
-  border: 2px solid #475569;
-}
+.hmi-btn-neutral { background: #ffffff; color: #0f172a; border: 2px solid #475569; }
 .hmi-btn-neutral:active { background: #e2e8f0; }
 
-/* Status & Timestamp Bar (Baseline Anchor: 42px Height) */
 .hmi-telemetry-bar {
   display: flex;
   justify-content: space-between;
@@ -418,21 +353,10 @@ CAMERA_EXTRA_BODY = """
   font-size: 0.88rem;
   box-sizing: border-box;
 }
-.telemetry-status {
-  font-weight: 700;
-  color: #0f172a;
-}
-.telemetry-tag {
-  color: #64748b;
-  margin-right: 4px;
-}
-.telemetry-clock {
-  font-family: monospace, sans-serif;
-  font-weight: 700;
-  color: #334155;
-}
+.telemetry-status { font-weight: 700; color: #0f172a; }
+.telemetry-tag { color: #64748b; margin-right: 4px; }
+.telemetry-clock { font-family: monospace, sans-serif; font-weight: 700; color: #334155; }
 
-/* Metric Display Cards (Equal 88px Height & Consistent Padding) */
 .hmi-metric-card {
   height: 88px;
   padding: 10px 16px;
@@ -478,27 +402,23 @@ CAMERA_EXTRA_BODY = """
   color: #0f172a;
 }
 
-/* Dispense Feed (Primary Action) */
 .hmi-btn-dispense {
   width: 100%;
   height: 52px;
   font-size: 1.15rem;
 }
 
-/* Manual Mode (Symmetric Horizontal Footer Partner: Exactly 42px Height) */
 .hmi-btn-manual {
   width: 100%;
   height: 42px;
   font-size: 0.95rem;
   background: #f8fafc;
   color: #1e293b;
-  border: 1px solid #cbd5e1; /* Identical border thickness and color as Telemetry Footer */
-  border-radius: 6px;        /* Identical corner radius as Telemetry Footer */
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
   box-sizing: border-box;
 }
-.hmi-btn-manual:active {
-  background: #e2e8f0;
-}
+.hmi-btn-manual:active { background: #e2e8f0; }
 
 .hmi-dispense-feedback {
   min-height: 16px;
@@ -509,43 +429,6 @@ CAMERA_EXTRA_BODY = """
   margin-top: -4px;
 }
 
-/* Modal Box Standards */
-.hmi-modal-box {
-  padding: 24px;
-  border-radius: 12px;
-  border: 1px solid #94a3b8;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.25);
-  background: #ffffff;
-}
-.hmi-modal-titlebar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
-}
-.hmi-dialog-title {
-  font-size: 1.25rem;
-  font-weight: 800;
-  color: #0f172a;
-  margin: 0;
-}
-.hmi-modal-body {
-  display: flex;
-  flex-direction: column;
-  gap: 12px; /* Tight 12px gap to lift keypad higher */
-  padding: 0;
-}
-.hmi-dialog-input {
-  font-size: 1.6rem;
-  font-weight: 800;
-  height: 48px;
-  text-align: center;
-  color: #0f172a;
-  border: 2px solid #cbd5e1;
-  border-radius: 6px;
-}
-
-/* Keypad Layout */
 .hmi-dialog-keypad {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -564,14 +447,6 @@ CAMERA_EXTRA_BODY = """
 .hmi-key-btn:active { background: #e2e8f0; }
 .hmi-key-fn { background: #e2e8f0; font-size: 1.1rem; color: #475569; }
 
-.hmi-modal-actions {
-  display: flex;
-  gap: 12px;
-}
-
-/* ========================================================= */
-/* Developer Dataset Collector Diagnostic Styling            */
-/* ========================================================= */
 .dev-stream-viewport {
   flex: 1 1 82%;
   min-height: 0;
@@ -601,7 +476,6 @@ CAMERA_EXTRA_BODY = """
   gap: 16px;
 }
 
-/* 4-Column Equal Telemetry Diagnostic Grid */
 .dev-telemetry-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -633,7 +507,6 @@ CAMERA_EXTRA_BODY = """
   margin-top: 2px;
 }
 
-/* Right Group: Diagnostic Action Buttons */
 .dev-actions-cluster {
   display: flex;
   align-items: center;
@@ -690,7 +563,6 @@ const targetKeyBack = document.getElementById('targetKeyBack');
 let flushRunning = false;
 let currentCounted = 0;
 
-// Footer Clock Implementation (Month Day, Year, HH:MM:SS AM/PM)
 function updateDashboardClock(){
   const el = document.getElementById('dashboardFooterClock');
   if (!el) return;
@@ -716,9 +588,7 @@ updateDashboardClock();
 function formatSmartGrams(val) {
   const n = Number(val);
   if (!Number.isFinite(n) || n === 0) return '0.00 g';
-  if (Math.abs(n) < 1.0) {
-    return n.toFixed(5) + ' g';
-  }
+  if (Math.abs(n) < 1.0) return n.toFixed(5) + ' g';
   return n.toFixed(2) + ' g';
 }
 
@@ -740,7 +610,6 @@ function updateMainMetrics(counted) {
   displayRecommendedFeed.textContent = formatSmartGrams(calcRawFeed(currentCounted));
 }
 
-// Target Modal Logic with Keypad Integration
 function openTargetModal() {
   if (!shrimpTargetModal) return;
   shrimpTargetInput.value = '';
@@ -786,7 +655,6 @@ if (shrimpModalSubmit) {
   });
 }
 
-// Manual Mode Modal Logic
 function updateManualCalculator() {
   const count = parseInt(manualShrimpInput.value, 10) || 0;
   manualBiomassVal.textContent = formatSmartGrams(calcRawBiomass(count));
@@ -821,7 +689,6 @@ if (btnManualClear) {
   });
 }
 
-// Hidden Developer Dataset Studio Logic
 const devModeModal = document.getElementById('developerModeModal');
 const devVideoFeed = document.getElementById('devVideoFeed');
 const btnExitDevMode = document.getElementById('btnExitDevMode');
@@ -920,7 +787,6 @@ function stopDevRecording() {
 if (btnDevStartRecord) btnDevStartRecord.addEventListener('click', startDevRecording);
 if (btnDevStopRecord) btnDevStopRecord.addEventListener('click', stopDevRecording);
 
-// Machine Loop Actions
 if (cameraStartContinuousBtn) {
   cameraStartContinuousBtn.addEventListener('click', async () => {
     if (automationRunning || flushRunning) return;
@@ -950,7 +816,6 @@ if (cameraCancelLoopBtn) {
   });
 }
 
-// Dispense Actions
 if (btnDispenseAuto) {
   btnDispenseAuto.addEventListener('click', async () => {
     if (currentCounted <= 0) {
