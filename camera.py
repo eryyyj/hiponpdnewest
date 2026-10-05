@@ -1,8 +1,8 @@
 """
 Camera page (/) - ShrimpSense Industrial Touchscreen HMI
 - Preserves the right panel two-section layout with bottom-anchored actions
-- Bottom row alignment: Manual Mode height/border matches Telemetry bar
-- Reliable double-click/double-tap trigger for Developer Mode modal
+- Developer Mode includes Start/Stop toggle button for Relay 1 (Water Pump)
+- Compact, overflow-free telemetry layout with badge indicators
 """
 
 from flask import Blueprint, Response
@@ -174,56 +174,74 @@ CAMERA_BODY = """
 
 <!-- Developer Dataset Collector / CV Inspector Modal -->
 <div class="modal" id="developerModeModal" tabindex="-1">
-  <div class="modal-dialog modal-dialog-centered" style="max-width: 1240px; width: 98%; height: 95%;">
-    <div class="modal-content d-flex flex-column h-100 p-0 overflow-hidden bg-dark text-white border-secondary" style="border-radius:12px;">
+  <div class="modal-dialog modal-dialog-centered" style="max-width: 1200px; width: 96%; height: 92%;">
+    <div class="modal-content d-flex flex-column h-100 p-0 overflow-hidden dev-modal-window">
       
-      <div class="d-flex justify-content-between align-items-center px-3 py-2 bg-black border-bottom border-secondary" style="height: 42px;">
+      <!-- Modal Top Bar -->
+      <div class="dev-header-bar">
         <div class="d-flex align-items-center">
-          <span class="status-dot" id="devRecDot" style="background:#64748b;"></span>
-          <span class="small font-weight-bold ml-2 text-light">DEVELOPER CV INSPECTOR &bull; DATASET COLLECTOR</span>
+          <span class="status-dot" id="devRecDot"></span>
+          <span class="dev-header-title ml-2">DATASET RECORDER &bull; CV INSPECTOR</span>
         </div>
-        <span class="small font-weight-bold text-muted">Raspberry Pi Live Diagnostic</span>
+        <div class="dev-header-badge">Live Hardware Controls</div>
       </div>
 
+      <!-- Live Stream Viewport -->
       <div class="dev-stream-viewport">
         <img id="devVideoFeed" src="" alt="Developer Feed" class="dev-stream-img">
         <div id="devFeedFallback" class="text-muted text-center" style="display:none;">
-          <h5>Camera Feed Inactive</h5>
-          <small>Check hardware connection</small>
+          <h6 class="font-weight-bold">Camera Feed Inactive</h6>
+          <small>Check camera hardware connection</small>
         </div>
       </div>
 
+      <!-- Aesthetic Telemetry & Controls Panel -->
       <div class="dev-footer-panel">
+        
+        <!-- 4 Grid Telemetry Cards -->
         <div class="dev-telemetry-grid">
           <div class="dev-stat-card">
-            <span class="dev-stat-label">RECORDING STATUS</span>
-            <div class="dev-stat-value" id="devRecordingStatusText">● Idle</div>
+            <span class="dev-stat-label">RECORD STATUS</span>
+            <div class="dev-stat-value" id="devRecordingStatusText">
+              <span class="dev-pill dev-pill-idle">IDLE</span>
+            </div>
           </div>
           <div class="dev-stat-card">
-            <span class="dev-stat-label">ELAPSED TIME</span>
-            <div class="dev-stat-value font-monospace" id="devRecordTimer">00:00</div>
+            <span class="dev-stat-label">RECORD DURATION</span>
+            <div class="dev-stat-value font-mono" id="devRecordTimer">00:00</div>
           </div>
           <div class="dev-stat-card">
-            <span class="dev-stat-label">STORAGE REMAINING</span>
-            <div class="dev-stat-value" id="devStorageRemaining">14.8 GB</div>
+            <span class="dev-stat-label">WATER PUMP</span>
+            <div class="dev-stat-value" id="devPumpStatusText">
+              <span class="dev-pill dev-pill-off" id="devPumpPill">STOPPED</span>
+            </div>
           </div>
           <div class="dev-stat-card">
-            <span class="dev-stat-label">VIDEOS RECORDED</span>
-            <div class="dev-stat-value" id="devVideosRecorded">0</div>
+            <span class="dev-stat-label">DISK FREE / VIDEOS</span>
+            <div class="dev-stat-value font-mono-sm">
+              <span id="devStorageRemaining">14.8 GB</span> <span class="text-muted mx-1">|</span> <span id="devVideosRecorded" class="text-info">0</span>
+            </div>
           </div>
         </div>
 
+        <!-- Action Control Buttons -->
         <div class="dev-actions-cluster">
+          <!-- Two-State Dynamic Pump Button -->
+          <button type="button" id="btnDevTogglePump" class="btn btn-outline-info font-weight-bold dev-action-btn">
+            &#9654; Start Pump
+          </button>
+          
           <button type="button" id="btnDevStartRecord" class="btn btn-danger font-weight-bold dev-action-btn">
-            Start Recording
+            Record Video
           </button>
           <button type="button" id="btnDevStopRecord" class="btn btn-secondary font-weight-bold dev-action-btn" disabled>
-            Stop Recording
+            Stop Record
           </button>
-          <button type="button" id="btnExitDevMode" class="btn btn-outline-light font-weight-bold dev-action-btn">
+          <button type="button" id="btnExitDevMode" class="btn btn-outline-secondary font-weight-bold dev-action-btn dev-btn-exit">
             Exit
           </button>
         </div>
+
       </div>
 
     </div>
@@ -450,8 +468,43 @@ CAMERA_EXTRA_BODY = """
 .hmi-key-btn:active { background: #e2e8f0; }
 .hmi-key-fn { background: #e2e8f0; font-size: 1.1rem; color: #475569; }
 
+/* =========================================================
+   Developer Console Modern Industrial Styling
+   ========================================================= */
+.dev-modal-window {
+  background: #090e17;
+  border: 1px solid #1e293b;
+  border-radius: 12px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+}
+
+.dev-header-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 16px;
+  height: 42px;
+  background: #040711;
+  border-bottom: 1px solid #1e293b;
+}
+.dev-header-title {
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  color: #f1f5f9;
+}
+.dev-header-badge {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #64748b;
+  background: #0f172a;
+  padding: 3px 10px;
+  border-radius: 4px;
+  border: 1px solid #1e293b;
+}
+
 .dev-stream-viewport {
-  flex: 1 1 82%;
+  flex: 1 1 auto;
   min-height: 0;
   background: #000000;
   display: flex;
@@ -469,58 +522,96 @@ CAMERA_EXTRA_BODY = """
 }
 
 .dev-footer-panel {
-  flex: 0 0 94px;
-  background: #111827;
-  border-top: 2px solid #374151;
+  flex-shrink: 0;
+  background: #090e17;
+  border-top: 1px solid #1e293b;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 16px;
-  gap: 16px;
+  padding: 10px 14px;
+  gap: 12px;
 }
 
 .dev-telemetry-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 10px;
+  gap: 8px;
   flex: 1;
 }
+
 .dev-stat-card {
-  height: 72px;
-  background: #1f2937;
-  border: 1px solid #374151;
-  border-radius: 8px;
-  padding: 8px 12px;
+  height: 56px;
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  border-radius: 6px;
+  padding: 6px 10px;
   display: flex;
   flex-direction: column;
   justify-content: center;
 }
 .dev-stat-label {
-  font-size: 0.72rem;
+  font-size: 0.64rem;
   font-weight: 800;
-  letter-spacing: 0.7px;
-  color: #9ca3af;
+  letter-spacing: 0.6px;
+  color: #64748b;
   text-transform: uppercase;
+  margin-bottom: 2px;
 }
 .dev-stat-value {
-  font-size: 1.35rem;
-  font-weight: 800;
-  color: #f3f4f6;
-  line-height: 1.2;
-  margin-top: 2px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #f8fafc;
+  line-height: 1.1;
+  display: flex;
+  align-items: center;
 }
+.font-mono {
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.5px;
+}
+.font-mono-sm {
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 0.92rem;
+}
+
+.dev-pill {
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 4px;
+  letter-spacing: 0.5px;
+}
+.dev-pill-idle { background: #1e293b; color: #94a3b8; }
+.dev-pill-rec { background: #7f1d1d; color: #fecaca; }
+.dev-pill-off { background: #1e293b; color: #94a3b8; }
+.dev-pill-on { background: #064e3b; color: #6ee7b7; border: 1px solid #059669; }
 
 .dev-actions-cluster {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 .dev-action-btn {
-  height: 64px;
-  min-width: 130px;
-  font-size: 0.95rem;
-  padding: 0 16px;
+  height: 56px;
+  min-width: 110px;
+  font-size: 0.88rem;
+  border-radius: 6px;
+  padding: 0 14px;
   white-space: nowrap;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+.dev-btn-exit {
+  color: #94a3b8;
+  border-color: #334155;
+  background: transparent;
+}
+.dev-btn-exit:hover {
+  background: #1e293b;
+  color: #ffffff;
 }
 
 @keyframes blinker { 50% { opacity: 0; } }
@@ -692,7 +783,7 @@ if (btnManualClear) {
 }
 
 /* =========================================================
-   Developer Mode Event Delegation & Controller
+   Developer Mode Event Delegation & Dynamic Pump Controller
    ========================================================= */
 const devModeModal = document.getElementById('developerModeModal');
 const devVideoFeed = document.getElementById('devVideoFeed');
@@ -705,9 +796,60 @@ const devRecordTimer = document.getElementById('devRecordTimer');
 const devStorageRemaining = document.getElementById('devStorageRemaining');
 const devVideosRecorded = document.getElementById('devVideosRecorded');
 
+const btnDevTogglePump = document.getElementById('btnDevTogglePump');
+const devPumpPill = document.getElementById('devPumpPill');
+
 let devRecordInterval = null;
 let devSecondsElapsed = 0;
 let devIsRecording = false;
+let devPumpRunning = false;
+
+function setPumpUiState(running) {
+  devPumpRunning = running;
+  if (!btnDevTogglePump) return;
+
+  if (running) {
+    btnDevTogglePump.className = 'btn btn-danger font-weight-bold dev-action-btn';
+    btnDevTogglePump.innerHTML = '&#9632; Stop Pump';
+    if (devPumpPill) {
+      devPumpPill.className = 'dev-pill dev-pill-on';
+      devPumpPill.textContent = 'RUNNING';
+    }
+  } else {
+    btnDevTogglePump.className = 'btn btn-outline-info font-weight-bold dev-action-btn';
+    btnDevTogglePump.innerHTML = '&#9654; Start Pump';
+    if (devPumpPill) {
+      devPumpPill.className = 'dev-pill dev-pill-off';
+      devPumpPill.textContent = 'STOPPED';
+    }
+  }
+}
+
+async function requestPumpAction(action) {
+  btnDevTogglePump.disabled = true;
+  try {
+    const res = await fetch('/api/developer/pump', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: action })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      setPumpUiState(action === 'on');
+    }
+  } catch(e) {
+    console.error('[Dev Pump] Failed to communicate:', e);
+  } finally {
+    btnDevTogglePump.disabled = false;
+  }
+}
+
+if (btnDevTogglePump) {
+  btnDevTogglePump.addEventListener('click', () => {
+    // If currently running, send 'off', else send 'on'
+    requestPumpAction(devPumpRunning ? 'off' : 'on');
+  });
+}
 
 function openDeveloperMode() {
   if (!devModeModal) return;
@@ -720,12 +862,21 @@ function openDeveloperMode() {
   if (devVideoFeed) devVideoFeed.src = '/video_feed';
   devModeModal.classList.add('show');
   devModeModal.style.display = 'flex';
+  setPumpUiState(false);
   refreshDevTelemetry();
 }
 
 function closeDeveloperMode() {
   if (!devModeModal) return;
+  
+  // Stop recording if running
   if (devIsRecording) stopDevRecording();
+  
+  // Safety: shut off pump immediately when closing
+  if (devPumpRunning) {
+    requestPumpAction('off');
+  }
+  
   if (devVideoFeed) devVideoFeed.src = '';
   devModeModal.classList.remove('show');
   devModeModal.style.display = 'none';
@@ -748,7 +899,7 @@ async function refreshDevTelemetry() {
   } catch(e) {}
 }
 
-// Intercept single vs double click on brand button
+// Double click intercept on brand button
 let brandClickTimer = null;
 document.addEventListener('click', (e) => {
   const toggle = e.target.closest('#secretFeedToggle');
@@ -777,8 +928,8 @@ function startDevRecording() {
   btnDevStopRecord.disabled = false;
   devRecDot.style.background = '#dc2626';
   devRecDot.style.animation = 'blinker 1s linear infinite';
-  devRecordingStatusText.textContent = '● Recording';
-  devRecordingStatusText.style.color = '#ef4444';
+  
+  devRecordingStatusText.innerHTML = '<span class="dev-pill dev-pill-rec">RECORDING</span>';
 
   fetch('/api/developer/record/start', { method: 'POST' }).catch(() => {});
 
@@ -797,8 +948,8 @@ function stopDevRecording() {
   btnDevStopRecord.disabled = true;
   devRecDot.style.background = '#64748b';
   devRecDot.style.animation = 'none';
-  devRecordingStatusText.textContent = '● Idle';
-  devRecordingStatusText.style.color = '#f3f4f6';
+
+  devRecordingStatusText.innerHTML = '<span class="dev-pill dev-pill-idle">IDLE</span>';
 
   fetch('/api/developer/record/stop', { method: 'POST' }).catch(() => {});
   refreshDevTelemetry();

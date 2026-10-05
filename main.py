@@ -2231,6 +2231,20 @@ def api_developer_record_stop():
     ok = camera_mgr.stop_dataset_recording()
     return jsonify({"ok": ok})
 
+@flask_app.route("/api/developer/pump", methods=["POST"])
+def api_developer_pump():
+    data = request.get_json(silent=True) or {}
+    action = data.get("action", "off")
+    
+    if action == "on":
+        serial_mgr.send("R1ON")
+        return jsonify({"ok": True, "pump": True})
+    elif action == "off":
+        serial_mgr.send("R1OFF")
+        return jsonify({"ok": True, "pump": False})
+    
+    return jsonify({"ok": False, "error": "Invalid action"}), 400
+
 
 @flask_app.route("/api/ports", methods=["GET"])
 def api_ports():
