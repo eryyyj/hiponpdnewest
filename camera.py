@@ -144,12 +144,15 @@ CAMERA_BODY = """
   </div>
 </div>
 
-<!-- Secret Developer Live Feed Modal -->
+<!-- Secret Developer Live Feed Modal with Recording Indicator -->
 <div class="modal" id="secretFeedModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered" style="max-width: 680px; width: 95%;">
     <div class="modal-content shadow-lg border-0 bg-dark text-white" style="border-radius:12px; overflow: hidden;">
       <div class="modal-header border-0 py-2 px-3 d-flex justify-content-between align-items-center" style="background:#111827;">
-        <span class="small font-weight-bold text-muted">DEV STREAM INSPECTOR</span>
+        <div class="d-flex align-items-center">
+          <span class="status-dot" style="background:#dc3545; animation: blinker 1s linear infinite;"></span>
+          <span class="small font-weight-bold text-white ml-2">DEV STREAM INSPECTOR &bull; REC</span>
+        </div>
         <button type="button" class="close text-white" id="secretFeedClose" aria-label="Close" style="opacity: 0.8;"><span>&times;</span></button>
       </div>
       <div class="modal-body p-0 text-center bg-black" style="min-height: 480px; display: flex; align-items: center; justify-content: center;">
@@ -162,6 +165,11 @@ CAMERA_BODY = """
 
 CAMERA_EXTRA_BODY = """
 <div id="captureToast" class="alert alert-success shadow"></div>
+<style>
+@keyframes blinker {
+  50% { opacity: 0; }
+}
+</style>
 """
 
 CAMERA_SCRIPT = r"""
@@ -200,7 +208,6 @@ const secretVideoFeed = document.getElementById('secretVideoFeed');
 let flushRunning = false;
 let currentCounted = 0;
 
-// Dynamic Decimal Precision:
 function formatSmartGrams(val) {
   const n = Number(val);
   if (!Number.isFinite(n) || n === 0) return '0.00 g';
@@ -228,7 +235,6 @@ function updateMainMetrics(counted) {
   displayRecommendedFeed.textContent = formatSmartGrams(calcRawFeed(currentCounted));
 }
 
-// Feed Simulator Modal
 function updateManualCalculator() {
   const count = parseInt(manualShrimpInput.value, 10) || 0;
   manualBiomassVal.textContent = formatSmartGrams(calcRawBiomass(count));
@@ -263,7 +269,6 @@ if (btnManualClear) {
   });
 }
 
-// Secret Developer Live Feed Logic
 function openSecretFeed() {
   if (!secretFeedModal) return;
   fetch('/api/live_feed', {
@@ -286,7 +291,6 @@ function closeSecretFeed() {
   }).catch(() => {});
 }
 
-// Listen to double clicks/taps on the brand title in the top navbar
 const brandSecretToggle = document.getElementById('secretFeedToggle');
 if (brandSecretToggle) {
   brandSecretToggle.addEventListener('dblclick', (e) => {
@@ -302,7 +306,6 @@ if (secretFeedModal) {
   });
 }
 
-// Loop Start Buttons
 if (cameraStartContinuousBtn) {
   cameraStartContinuousBtn.addEventListener('click', async () => {
     if (automationRunning || flushRunning) return;
@@ -339,7 +342,6 @@ if (cameraCancelLoopBtn) {
   });
 }
 
-// Dispensing Handlers
 if (btnDispenseAuto) {
   btnDispenseAuto.addEventListener('click', async () => {
     if (currentCounted <= 0) {
@@ -399,7 +401,7 @@ if (btnManualStop) {
   btnManualStop.addEventListener('click', async () => {
     try {
       await fetch('/api/feed/stop', { method: 'POST' });
-      dispenseStatusText.textContent = 'Dispenser stopped.';
+      dispenseStatusText.textContent = '';
     } catch(e) {}
     btnDispenseAuto.disabled = false;
     btnManualDispense.disabled = false;

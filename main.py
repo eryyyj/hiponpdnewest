@@ -92,6 +92,8 @@ class PiCamCapture:
 
 CAMERA_RESOLUTION = (640, 640)
 SNAPSHOT_DIR = os.path.expanduser("~/esp32_snapshots")
+VIDEO_CAPTURE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "captures", "videos")
+os.makedirs(VIDEO_CAPTURE_DIR, exist_ok=True)
 
 _PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 YOLO_WEIGHTS_PATH = os.path.join(_PROJECT_ROOT, "models", "best.pt")
@@ -271,6 +273,18 @@ PAGE_STYLE = """
   .status-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; margin-right: 5px; background: #dc3545; }
   .status-dot.on { background: #28a745; }
 
+  /* Navbar Clock Badge */
+  .navbar-clock-badge {
+    background: #ffffff;
+    border: 1px solid #E2E8F0;
+    color: #111827;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 6px;
+    letter-spacing: 0.3px;
+  }
+
   #shrimpTargetModal, #powerModal, #calibrationModal, #roiModal, #manualFeedModal, #secretFeedModal {
     display: none; position: fixed; inset: 0; z-index: 1080;
     background: rgba(17, 24, 39, 0.6); align-items: center; justify-content: center;
@@ -315,7 +329,7 @@ def render_nav_links(active):
     <li class="nav-item mr-3">
       <a class="nav-link d-flex align-items-center {dashboard_active}" href="/" id="secretFeedToggle" title="Double click for developer feed">
         <img src="/assets/ShrimpSenseLogo.png" alt="ShrimpSense" onerror="this.src='/assets/images/ShrimpSenseLogo.png'" style="height: 32px; width: auto;" class="mr-2">
-        <strong style="font-size:1.15rem;">ShrimpSense Dashboard</strong>
+        <strong style="font-size:1.15rem;">ShrimpSense</strong>
       </a>
     </li>
     """
@@ -328,6 +342,16 @@ def render_nav_links(active):
 
 
 COMMON_SCRIPT = """
+function updateClock(){
+  const el = document.getElementById('navbarClock');
+  if (!el) return;
+  const now = new Date();
+  const opts = { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true };
+  el.textContent = now.toLocaleDateString('en-US', opts);
+}
+setInterval(updateClock, 1000);
+updateClock();
+
 async function refreshPorts(){
   const res = await fetch('/api/ports');
   const data = await res.json();
@@ -727,6 +751,9 @@ def render_page(active, body, page_script, extra_body="", full_height=False):
       </ul>
 
       <ul class="navbar-nav ml-auto align-items-center flex-nowrap">
+        <li class="nav-item px-2 d-none d-md-block">
+          <div class="navbar-clock-badge" id="navbarClock">--- --, ---- &bull; --:--:-- --</div>
+        </li>
         <li class="nav-item px-1">
           <select id="portSelect" class="custom-select custom-select-sm text-dark font-weight-bold" style="width:auto;"></select>
         </li>
@@ -1356,6 +1383,7 @@ class AutomationManager:
             self._target_count = None
 
         self._set_default_state()
+        camera_mgr.stop_recording()
         return not already_idle
 
     def _send(self, device, action):
@@ -1421,6 +1449,7 @@ class AutomationManager:
                     self._last_target_count = self._target_count
                     self._just_completed = True
                 self._target_count = None
+            camera_mgr.stop_recording()
 
 
 automation_mgr = AutomationManager()
@@ -1766,6 +1795,7 @@ class FlushManager:
             self._running = False
             self._current_index = -1
             self._seconds_left = 0
+        camera_mgr.stop_recording()
         return not already_idle
 
     def _send(self, device, action):
@@ -1809,12 +1839,13 @@ class FlushManager:
                 self._running = False
                 self._current_index = -1
                 self._seconds_left = 0
+            camera_mgr.stop_recording()
 
 
 flush_mgr = FlushManager()
 
 # ---------------------------------------------------------------------------
-# Camera Manager
+# Camera Manager (with Video Recording capability)
 # ---------------------------------------------------------------------------
 class CameraManager:
     def __init__(self, resolution=CAMERA_RESOLUTION):
@@ -1836,6 +1867,12 @@ class CameraManager:
         self._roi = dict(DEFAULT_ROI)
         self._frame_is_bgr = True
         self._fallback_id = 10000
+        
+        # Video Writer support
+        self._video_writer = None
+        self._video_lock = threading.Lock()
+        self._is_recording = False
+        
         self._load_camera_settings()
 
     def start(self):
@@ -1877,17 +1914,59 @@ class CameraManager:
         with self._live_lock:
             self._live_feed_enabled = bool(enabled)
             requested = self._live_feed_enabled
-        if requested and automation_mgr.is_running():
-            return False
+        if requested:
+            self.start_recording()
+        else:
+            if not automation_mgr.is_running() and not flush_mgr.is_running():
+                self.stop_recording()
         return requested
 
     def live_feed_status(self):
-        enabled = self.live_feed_enabled() and not automation_mgr.is_running()
         return {
-            "enabled": enabled,
+            "enabled": self.live_feed_enabled(),
             "automation_running": automation_mgr.is_running(),
             "available": self.available,
+            "recording": self._is_recording
         }
+
+    def start_recording(self):
+        with self._video_lock:
+            if self._is_recording:
+                return
+            try:
+                base = time.strftime('%Y%m%d_%H%M%S')
+                filepath = os.path.join(VIDEO_CAPTURE_DIR, f"record_{base}.mp4")
+                fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+                self._video_writer = cv2.VideoWriter(filepath, fourcc, 15.0, self.resolution)
+                self._is_recording = True
+                print(f"[Camera] Video recording started -> {filepath}")
+            except Exception as e:
+                print(f"[Camera] Failed to start video writer: {e}")
+
+    def stop_recording(self):
+        with self._video_lock:
+            if not self._is_recording:
+                return
+            try:
+                if self._video_writer is not None:
+                    self._video_writer.release()
+                    self._video_writer = None
+                self._is_recording = False
+                print("[Camera] Video recording stopped and finalized.")
+            except Exception as e:
+                print(f"[Camera] Error stopping video writer: {e}")
+
+    def _write_frame_to_video(self, frame_bgr):
+        with self._video_lock:
+            if self._is_recording and self._video_writer is not None:
+                try:
+                    if (frame_bgr.shape[1], frame_bgr.shape[0]) != self.resolution:
+                        res_frame = cv2.resize(frame_bgr, self.resolution)
+                        self._video_writer.write(res_frame)
+                    else:
+                        self._video_writer.write(frame_bgr)
+                except Exception:
+                    pass
 
     def _grab_bgr(self):
         with self._frame_lock:
@@ -1904,6 +1983,7 @@ class CameraManager:
         frame = self._grab_bgr()
         if frame is None:
             return False
+        self._write_frame_to_video(frame)
         self._draw_roi_only(frame)
         latest_frame.set(self._to_pil(frame))
         return True
@@ -1936,6 +2016,7 @@ class CameraManager:
                 if frame is None:
                     time.sleep(BURST_INTERVAL_S)
                     continue
+                self._write_frame_to_video(frame)
                 dets = self._track_frame(frame)
                 dets = self._filter_to_roi(dets, frame.shape[1], frame.shape[0])
                 dets = self._assign_missing_ids(dets)
@@ -2152,6 +2233,7 @@ class CameraManager:
         return Image.fromarray(arr.copy())
 
     def stop(self):
+        self.stop_recording()
         if self.camera_cap is not None:
             try:
                 self.camera_cap.release()
@@ -2207,7 +2289,7 @@ def camera_capture_loop():
             time.sleep(0.5)
             continue
         try:
-            if camera_mgr.live_feed_enabled() and not automation_mgr.is_running():
+            if camera_mgr.live_feed_enabled():
                 if not camera_mgr.pump_preview():
                     time.sleep(0.2)
                     continue
