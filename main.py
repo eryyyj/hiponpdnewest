@@ -174,10 +174,15 @@ PAGE_STYLE = """
     font-family: 'Lato', sans-serif;
     background-color: var(--marine-light);
     color: #111827;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
   }
   .content-wrapper {
     background-color: var(--marine-light);
     position: relative;
+    padding: 0 !important;
+    margin: 0 !important;
   }
   .wrapper { background-color: var(--marine-light); }
 
@@ -199,7 +204,7 @@ PAGE_STYLE = """
     border-color: var(--shrimp-orange);
     color: #fff;
   }
-  .btn-shrimp-accent:hover, .btn-shrimp-accent:focus {
+  .btn-shrimp-accent:hover {
     background-color: #D35400;
     border-color: #D35400;
     color: #fff;
@@ -211,44 +216,6 @@ PAGE_STYLE = """
   .btn-outline-marine:hover {
     background-color: #111827;
     color: #fff;
-  }
-
-  .process-stage-container {
-    background: #ffffff;
-    border-radius: 10px;
-    min-height: 280px;
-    width: 100%;
-    padding: 24px;
-    box-shadow: inset 0 0 10px rgba(0,0,0,0.02);
-  }
-  .process-text-headline {
-    font-size: 2.1rem;
-    color: #111827;
-    letter-spacing: 0.5px;
-  }
-  .process-text-sub {
-    font-size: 1.25rem;
-    color: #111827;
-  }
-
-  .metric-card {
-    background: #ffffff;
-    border-color: #E2E8F0 !important;
-  }
-  .metric-label {
-    font-size: 11px;
-    letter-spacing: 0.5px;
-    color: #111827;
-  }
-  .metric-val {
-    font-size: 2rem;
-    line-height: 1.1;
-    color: #111827;
-  }
-  .metric-val-sm {
-    font-size: 1.45rem;
-    line-height: 1.1;
-    color: #111827;
   }
 
   .gallery-item { cursor: pointer; }
@@ -270,20 +237,8 @@ PAGE_STYLE = """
   }
   #captureToast.show { opacity: 1; }
 
-  .status-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; margin-right: 5px; background: #dc3545; }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 4px; background: #dc3545; }
   .status-dot.on { background: #28a745; }
-
-  /* Navbar Clock Badge */
-  .navbar-clock-badge {
-    background: #ffffff;
-    border: 1px solid #E2E8F0;
-    color: #111827;
-    font-size: 13px;
-    font-weight: 700;
-    padding: 4px 10px;
-    border-radius: 6px;
-    letter-spacing: 0.3px;
-  }
 
   #shrimpTargetModal, #powerModal, #calibrationModal, #roiModal, #manualFeedModal, #secretFeedModal {
     display: none; position: fixed; inset: 0; z-index: 1080;
@@ -328,7 +283,7 @@ def render_nav_links(active):
     brand_tab = f"""
     <li class="nav-item mr-3">
       <a class="nav-link d-flex align-items-center {dashboard_active}" href="/" id="secretFeedToggle" title="Double click for developer feed">
-        <img src="/assets/ShrimpSenseLogo.png" alt="ShrimpSense" onerror="this.src='/assets/images/ShrimpSenseLogo.png'" style="height: 32px; width: auto;" class="mr-2">
+        <img src="/assets/ShrimpSenseLogo.png" alt="ShrimpSense" onerror="this.src='/assets/images/ShrimpSenseLogo.png'" style="height: 28px; width: auto;" class="mr-2">
         <strong style="font-size:1.15rem;">ShrimpSense</strong>
       </a>
     </li>
@@ -342,16 +297,6 @@ def render_nav_links(active):
 
 
 COMMON_SCRIPT = """
-function updateClock(){
-  const el = document.getElementById('navbarClock');
-  if (!el) return;
-  const now = new Date();
-  const opts = { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true };
-  el.textContent = now.toLocaleDateString('en-US', opts);
-}
-setInterval(updateClock, 1000);
-updateClock();
-
 async function refreshPorts(){
   const res = await fetch('/api/ports');
   const data = await res.json();
@@ -740,20 +685,17 @@ def render_page(active, body, page_script, extra_body="", full_height=False):
 <body class="hold-transition layout-top-nav">
 <div class="wrapper">
 
-  <nav class="main-header navbar navbar-expand navbar-white navbar-light border-bottom px-2 shadow-sm">
+  <nav class="main-header navbar navbar-expand navbar-white navbar-light border-bottom px-2 shadow-sm" style="min-height: 48px; padding-top: 3px; padding-bottom: 3px;">
     <div class="container-fluid">
       <ul class="navbar-nav align-items-center">
         {render_nav_links(active)}
         <li class="nav-item ml-2">
-          <button id="calibrationBtn" class="btn btn-outline-secondary btn-sm mr-1 font-weight-bold text-dark">Calibration</button>
-          <button id="roiBtn" class="btn btn-outline-secondary btn-sm font-weight-bold text-dark">ROI</button>
+          <button id="calibrationBtn" class="btn btn-outline-secondary btn-sm mr-1 font-weight-bold text-dark py-1">Calibration</button>
+          <button id="roiBtn" class="btn btn-outline-secondary btn-sm font-weight-bold text-dark py-1">ROI</button>
         </li>
       </ul>
 
       <ul class="navbar-nav ml-auto align-items-center flex-nowrap">
-        <li class="nav-item px-2 d-none d-md-block">
-          <div class="navbar-clock-badge" id="navbarClock">--- --, ---- &bull; --:--:-- --</div>
-        </li>
         <li class="nav-item px-1">
           <select id="portSelect" class="custom-select custom-select-sm text-dark font-weight-bold" style="width:auto;"></select>
         </li>
@@ -761,22 +703,22 @@ def render_page(active, body, page_script, extra_body="", full_height=False):
           <button id="refreshBtn" class="btn btn-sm btn-outline-secondary text-dark font-weight-bold" title="Refresh ports">&#8635;</button>
         </li>
         <li class="nav-item px-1">
-          <button id="connectBtn" class="btn btn-sm btn-success font-weight-bold">Connect</button>
+          <button id="connectBtn" class="btn btn-sm btn-success font-weight-bold py-1">Connect</button>
         </li>
         <li class="nav-item px-2 d-flex align-items-center">
           <span id="statusDot" class="status-dot"></span>
-          <small id="statusText" class="text-dark font-weight-bold d-none d-md-inline">Disconnected</small>
+          <small id="statusText" class="text-dark font-weight-bold d-none d-md-inline" style="font-size:12px;">Disconnected</small>
         </li>
         <li class="nav-item px-1">
-          <button id="shutdownBtn" class="btn btn-sm btn-outline-danger font-weight-bold" title="Power">&#9211; Power</button>
+          <button id="shutdownBtn" class="btn btn-sm btn-outline-danger font-weight-bold py-1" title="Power">&#9211; Power</button>
         </li>
       </ul>
     </div>
   </nav>
 
   <div class="content-wrapper">
-    <div class="content pt-2 pb-3">
-      <div class="container-fluid">
+    <div class="content" style="padding: 0 !important;">
+      <div class="container-fluid" style="padding: 0 !important;">
 {body}
       </div>
     </div>
@@ -788,23 +730,23 @@ def render_page(active, body, page_script, extra_body="", full_height=False):
 <div class="modal" id="calibrationModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content shadow border-0" style="border-radius:12px;">
-      <div class="modal-header border-bottom">
+      <div class="modal-header border-bottom py-2">
         <h5 class="modal-title font-weight-bold text-dark">System Calibration</h5>
         <button type="button" class="close" id="calibrationModalClose" aria-label="Close"><span>&times;</span></button>
       </div>
-      <div class="modal-body">
-        <label for="calibConfidence" class="text-dark font-weight-bold">Detection Confidence</label>
+      <div class="modal-body p-3">
+        <label for="calibConfidence" class="text-dark font-weight-bold small mb-1">Detection Confidence</label>
         <input id="calibConfidence" type="text" class="form-control mb-2 text-dark font-weight-bold" placeholder="0.437">
-        <label for="calibFeederMultiplier" class="text-dark font-weight-bold">Feeder Multiplier</label>
+        <label for="calibFeederMultiplier" class="text-dark font-weight-bold small mb-1">Feeder Multiplier</label>
         <input id="calibFeederMultiplier" type="text" class="form-control mb-2 text-dark font-weight-bold" placeholder="0.15">
-        <label for="calibShrimpWeight" class="text-dark font-weight-bold">Single Shrimp Weight (g)</label>
+        <label for="calibShrimpWeight" class="text-dark font-weight-bold small mb-1">Single Shrimp Weight (g)</label>
         <input id="calibShrimpWeight" type="text" class="form-control mb-2 text-dark font-weight-bold" placeholder="0.00333">
-        <label for="calibFeederPulse" class="text-dark font-weight-bold">Feeder Pulse Duration (s)</label>
+        <label for="calibFeederPulse" class="text-dark font-weight-bold small mb-1">Feeder Pulse Duration (s)</label>
         <input id="calibFeederPulse" type="text" class="form-control mb-2 text-dark font-weight-bold" placeholder="5">
-        <label for="calibFlushPump" class="text-dark font-weight-bold">Flush Duration (s)</label>
+        <label for="calibFlushPump" class="text-dark font-weight-bold small mb-1">Flush Duration (s)</label>
         <input id="calibFlushPump" type="text" class="form-control mb-2 text-dark font-weight-bold" placeholder="10">
       </div>
-      <div class="modal-footer">
+      <div class="modal-footer py-2">
         <button type="button" class="btn btn-secondary font-weight-bold" id="calibrationModalCancel">Cancel</button>
         <button type="button" class="btn btn-shrimp-primary font-weight-bold px-3" id="calibrationModalSave">Save</button>
       </div>
@@ -816,25 +758,25 @@ def render_page(active, body, page_script, extra_body="", full_height=False):
 <div class="modal" id="roiModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content shadow border-0" style="border-radius:12px;">
-      <div class="modal-header border-bottom">
+      <div class="modal-header border-bottom py-2">
         <h5 class="modal-title font-weight-bold text-dark">Region of Interest (ROI)</h5>
         <button type="button" class="close" id="roiModalClose" aria-label="Close"><span>&times;</span></button>
       </div>
-      <div class="modal-body">
+      <div class="modal-body p-3">
         <div class="roi-preview">
           <img id="roiPreviewImg" alt="Camera preview">
           <div class="roi-box" id="roiBox"></div>
         </div>
-        <div class="roi-slider-label text-dark font-weight-bold"><span>Left</span><span id="roiLeftVal">0%</span></div>
+        <div class="roi-slider-label text-dark font-weight-bold small"><span>Left</span><span id="roiLeftVal">0%</span></div>
         <input type="range" id="roiLeft" min="0" max="95" step="1" value="0" class="custom-range">
-        <div class="roi-slider-label text-dark font-weight-bold"><span>Right</span><span id="roiRightVal">0%</span></div>
+        <div class="roi-slider-label text-dark font-weight-bold small"><span>Right</span><span id="roiRightVal">0%</span></div>
         <input type="range" id="roiRight" min="0" max="95" step="1" value="0" class="custom-range">
-        <div class="roi-slider-label text-dark font-weight-bold"><span>Top</span><span id="roiTopVal">0%</span></div>
+        <div class="roi-slider-label text-dark font-weight-bold small"><span>Top</span><span id="roiTopVal">0%</span></div>
         <input type="range" id="roiTop" min="0" max="95" step="1" value="0" class="custom-range">
-        <div class="roi-slider-label text-dark font-weight-bold"><span>Bottom</span><span id="roiBottomVal">0%</span></div>
+        <div class="roi-slider-label text-dark font-weight-bold small"><span>Bottom</span><span id="roiBottomVal">0%</span></div>
         <input type="range" id="roiBottom" min="0" max="95" step="1" value="0" class="custom-range">
       </div>
-      <div class="modal-footer">
+      <div class="modal-footer py-2">
         <button type="button" class="btn btn-outline-secondary mr-auto font-weight-bold text-dark" id="roiResetBtn">Reset</button>
         <button type="button" class="btn btn-secondary font-weight-bold" id="roiModalCancel">Cancel</button>
         <button type="button" class="btn btn-shrimp-primary font-weight-bold px-3" id="roiSaveBtn">Save</button>
@@ -847,11 +789,11 @@ def render_page(active, body, page_script, extra_body="", full_height=False):
 <div class="modal" id="powerModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content shadow border-0" style="border-radius:12px;">
-      <div class="modal-header border-bottom">
+      <div class="modal-header border-bottom py-2">
         <h5 class="modal-title font-weight-bold text-dark">System Power</h5>
         <button type="button" class="close" id="powerModalClose" aria-label="Close"><span>&times;</span></button>
       </div>
-      <div class="modal-body">
+      <div class="modal-body p-3">
         <p class="text-dark font-weight-bold mb-3">Choose system action:</p>
         <button type="button" id="powerExitAppBtn" class="btn btn-secondary btn-block font-weight-bold py-2 mb-2">Exit Desktop App</button>
         <button type="button" id="powerShutdownPiBtn" class="btn btn-danger btn-block font-weight-bold py-2 mb-2">Shutdown Raspberry Pi</button>
@@ -865,15 +807,15 @@ def render_page(active, body, page_script, extra_body="", full_height=False):
 <div class="modal" id="shrimpTargetModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content shadow border-0" style="border-radius:12px;">
-      <div class="modal-header border-bottom">
+      <div class="modal-header border-bottom py-2">
         <h5 class="modal-title font-weight-bold text-dark">Target PL Shrimp Count</h5>
         <button type="button" class="close" id="shrimpModalClose" aria-label="Close"><span>&times;</span></button>
       </div>
-      <div class="modal-body">
+      <div class="modal-body p-3">
         <label for="shrimpTargetInput" class="font-weight-bold text-dark">Set Target Count</label>
         <input type="number" min="1" step="1" class="form-control form-control-lg text-center font-weight-bold text-dark" id="shrimpTargetInput" placeholder="e.g. 500">
       </div>
-      <div class="modal-footer">
+      <div class="modal-footer py-2">
         <button type="button" class="btn btn-secondary font-weight-bold" id="shrimpModalCancel">Cancel</button>
         <button type="button" class="btn btn-shrimp-primary font-weight-bold px-4" id="shrimpModalSubmit">Confirm &amp; Start</button>
       </div>

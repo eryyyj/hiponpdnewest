@@ -1,116 +1,122 @@
 """
 Camera page (/) - ShrimpSense Aquaculture Dashboard
-- Plain white process status display
-- Clean all-black metrics: Target PL Shrimp Count, Counted Shrimp, Total Biomass, Recommended Feed
-- Dual Run Controls: "Start" (continuous) and "Set Target" (panel target mode)
-- "Feed Simulator" modal
-- Hidden Developer Live Feed Modal (Double-click ShrimpSense Dashboard brand title in navbar to activate)
+- Zero-scroll industrial dashboard
+- 4 primary action buttons on the left
+- Status on bottom-left, Full Timestamp on bottom-right (Month Day, Year, HH:MM:SS AM/PM)
+- Right side: Compact cards, Dispense Feed, and secondary "Manual Mode" button
+- Secret Developer Live Feed (Double-click ShrimpSense logo/title in navbar)
 """
 
 from flask import Blueprint, Response
 
 CAMERA_BODY = """
-<div class="row" style="margin: 0 -6px;">
-  <!-- Left Side: Clean White Status Display & Loop Controls -->
-  <div class="col-lg-6 col-md-12 px-1 mb-2">
-    <div class="card h-100 shadow-sm border-0" style="border-radius: 12px;">
-      <div class="card-body p-3 d-flex flex-column justify-content-between">
-        
-        <!-- Plain White Process Area -->
-        <div class="process-stage-container d-flex flex-column align-items-center justify-content-center border" id="processDisplayArea">
-          <div id="processStatusMain" class="process-text-headline text-center font-weight-bold">
-            System Ready
-          </div>
-          <div id="processStatusSub" class="process-text-sub text-center mt-1">
-            Waiting for cycle
-          </div>
+<div class="dashboard-grid-container">
+  <!-- Left Side: Status Display, 4 Machine Buttons, Footer Info -->
+  <div class="col-panel left-panel">
+    <div class="card h-100 shadow-sm border-0 d-flex flex-column justify-content-between p-2" style="border-radius: 8px;">
+      
+      <!-- Compact White Process Area -->
+      <div class="process-stage-container d-flex flex-column align-items-center justify-content-center border" id="processDisplayArea">
+        <div id="processStatusMain" class="process-text-headline text-center font-weight-bold">
+          System Ready
         </div>
-
-        <!-- Automation & Machine Actions -->
-        <div class="d-flex justify-content-center flex-wrap mt-3" style="gap:8px;">
-          <button id="cameraStartContinuousBtn" class="btn btn-shrimp-primary btn-lg font-weight-bold px-4">
-            Start
-          </button>
-          <button id="cameraSetTargetBtn" class="btn btn-shrimp-accent btn-lg font-weight-bold px-3">
-            Set Target
-          </button>
-          <button id="cameraCancelLoopBtn" class="btn btn-outline-danger btn-lg font-weight-bold px-3">
-            Cancel
-          </button>
-          <button id="cameraFlushBtn" class="btn btn-outline-marine btn-lg font-weight-bold px-3">
-            Flush
-          </button>
-          <button id="btnOpenManualModal" class="btn btn-outline-secondary btn-lg font-weight-bold px-3">
-            Feed Simulator
-          </button>
+        <div id="processStatusSub" class="process-text-sub text-center mt-1">
+          Waiting for cycle
         </div>
-
-        <div id="cameraAutomationStatus" class="text-center mt-2" style="min-height:20px; font-size:13px;">
-          <span class="text-dark font-weight-bold">Status: Idle</span>
-        </div>
-        <p id="cameraFlushStatus" class="text-center text-dark mb-0" style="font-size:12px; min-height:16px;">&nbsp;</p>
       </div>
+
+      <!-- Exactly 4 Inline Buttons -->
+      <div class="d-flex justify-content-between mt-2 button-row" style="gap:6px;">
+        <button id="cameraStartContinuousBtn" class="btn btn-shrimp-primary font-weight-bold flex-fill">
+          Start
+        </button>
+        <button id="cameraSetTargetBtn" class="btn btn-shrimp-accent font-weight-bold flex-fill">
+          Set Target
+        </button>
+        <button id="cameraCancelLoopBtn" class="btn btn-outline-danger font-weight-bold flex-fill">
+          Cancel
+        </button>
+        <button id="cameraFlushBtn" class="btn btn-outline-marine font-weight-bold flex-fill">
+          Flush
+        </button>
+      </div>
+
+      <!-- Footer Bar: Status on Left, Full Timestamp on Right -->
+      <div class="d-flex justify-content-between align-items-center mt-2 px-1 border-top pt-1 text-dark" style="font-size: 11px;">
+        <div id="cameraAutomationStatus" class="font-weight-bold text-truncate mr-2">
+          Status: Idle
+        </div>
+        <div id="dashboardFooterClock" class="font-weight-bold text-muted text-nowrap">
+          -- --, ----, --:--:-- --
+        </div>
+      </div>
+
     </div>
   </div>
 
-  <!-- Right Side: Essential Shrimp & Feed Metrics -->
-  <div class="col-lg-6 col-md-12 px-1 mb-2">
-    <div class="card h-100 shadow-sm border-0" style="border-radius: 12px;">
-      <div class="card-body p-3 d-flex flex-column justify-content-between">
-        
+  <!-- Right Side: Metrics, Dispense Feed, and Manual Mode -->
+  <div class="col-panel right-panel">
+    <div class="card h-100 shadow-sm border-0 d-flex flex-column justify-content-between p-2" style="border-radius: 8px;">
+      
+      <div class="metrics-wrap">
         <!-- Metric 1: Target PL Shrimp Count -->
-        <div class="metric-card mb-2 p-2 rounded border">
+        <div class="metric-card mb-1 p-1 rounded border">
           <div class="metric-label text-dark font-weight-bold">TARGET PL SHRIMP COUNT</div>
           <div class="metric-val text-dark font-weight-bold" id="displayTargetCount">None</div>
         </div>
 
         <!-- Metric 2: Counted Shrimp -->
-        <div class="metric-card mb-2 p-2 rounded border">
+        <div class="metric-card mb-1 p-1 rounded border">
           <div class="metric-label text-dark font-weight-bold">COUNTED SHRIMP</div>
           <div class="metric-val text-dark font-weight-bold" id="displayCountedShrimp">0</div>
         </div>
 
         <!-- Metric 3 & 4: Total Biomass & Recommended Feed -->
-        <div class="row mb-2" style="margin: 0 -4px;">
+        <div class="row mb-1" style="margin: 0 -2px;">
           <div class="col-6 px-1">
-            <div class="metric-card p-2 rounded border text-center h-100">
+            <div class="metric-card p-1 rounded border text-center h-100">
               <div class="metric-label text-dark font-weight-bold">TOTAL BIOMASS</div>
               <div class="metric-val-sm font-weight-bold text-dark" id="displayBiomass">0.00 g</div>
             </div>
           </div>
           <div class="col-6 px-1">
-            <div class="metric-card p-2 rounded border text-center h-100">
+            <div class="metric-card p-1 rounded border text-center h-100">
               <div class="metric-label text-dark font-weight-bold">RECOMMENDED FEED</div>
               <div class="metric-val-sm font-weight-bold text-dark" id="displayRecommendedFeed">0.00 g</div>
             </div>
           </div>
         </div>
-
-        <!-- Primary Dispense Button -->
-        <div class="mt-2">
-          <button type="button" id="btnDispenseAuto" class="btn btn-shrimp-primary btn-block btn-lg font-weight-bold py-3 shadow-sm">
-            Dispense Feed
-          </button>
-          <div id="dispenseStatusText" class="text-center font-weight-bold text-dark mt-2" style="min-height:22px; font-size:14px;"></div>
-        </div>
-
       </div>
+
+      <!-- Action Section: Dispense Button & Cohesive Manual Mode Action -->
+      <div class="mt-1 d-flex flex-column">
+        <button type="button" id="btnDispenseAuto" class="btn btn-shrimp-primary btn-block font-weight-bold py-2 shadow-sm" style="font-size: 1.1rem;">
+          Dispense Feed
+        </button>
+        <div id="dispenseStatusText" class="text-center font-weight-bold text-dark mt-1" style="min-height: 16px; font-size: 11px;"></div>
+        
+        <!-- Secondary Button for Manual Mode directly below -->
+        <button type="button" id="btnOpenManualModal" class="btn btn-outline-secondary btn-block btn-sm font-weight-bold mt-1 py-1">
+          Manual Mode
+        </button>
+      </div>
+
     </div>
   </div>
 </div>
 
-<!-- Feed Simulator Modal -->
+<!-- Manual Mode Modal -->
 <div class="modal" id="manualFeedModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content shadow-lg border-0" style="border-radius:12px;">
-      <div class="modal-header border-bottom">
-        <h5 class="modal-title font-weight-bold text-dark">Feed Simulator</h5>
+    <div class="modal-content shadow-lg border-0" style="border-radius:10px;">
+      <div class="modal-header border-bottom py-2">
+        <h5 class="modal-title font-weight-bold text-dark">Manual Mode</h5>
         <button type="button" class="close" id="manualFeedModalClose" aria-label="Close"><span>&times;</span></button>
       </div>
       <div class="modal-body p-3">
         <label for="manualShrimpInput" class="text-dark font-weight-bold small text-uppercase mb-1">Enter Shrimp Count</label>
-        <div class="input-group mb-3">
-          <input id="manualShrimpInput" type="text" inputmode="none" autocomplete="off" class="form-control text-center font-weight-bold text-dark" style="font-size:1.6rem; height:50px;" placeholder="0">
+        <div class="input-group mb-2">
+          <input id="manualShrimpInput" type="text" inputmode="none" autocomplete="off" class="form-control text-center font-weight-bold text-dark" style="font-size:1.4rem; height:44px;" placeholder="0">
           <div class="input-group-append">
             <button class="btn btn-outline-secondary font-weight-bold text-dark" type="button" id="btnManualClear">Clear</button>
           </div>
@@ -120,13 +126,13 @@ CAMERA_BODY = """
           <div class="col-6 px-1">
             <div class="p-2 border rounded bg-light text-center">
               <small class="text-dark d-block font-weight-bold">Biomass</small>
-              <strong id="manualBiomassVal" class="text-dark" style="font-size:1.2rem;">0.00 g</strong>
+              <strong id="manualBiomassVal" class="text-dark" style="font-size:1.1rem;">0.00 g</strong>
             </div>
           </div>
           <div class="col-6 px-1">
             <div class="p-2 border rounded bg-light text-center">
               <small class="text-dark d-block font-weight-bold">Recommended Feed</small>
-              <strong id="manualFeedVal" class="text-dark" style="font-size:1.2rem;">0.00 g</strong>
+              <strong id="manualFeedVal" class="text-dark" style="font-size:1.1rem;">0.00 g</strong>
             </div>
           </div>
         </div>
@@ -144,10 +150,10 @@ CAMERA_BODY = """
   </div>
 </div>
 
-<!-- Secret Developer Live Feed Modal with Recording Indicator -->
+<!-- Secret Developer Live Feed Modal -->
 <div class="modal" id="secretFeedModal" tabindex="-1">
-  <div class="modal-dialog modal-dialog-centered" style="max-width: 680px; width: 95%;">
-    <div class="modal-content shadow-lg border-0 bg-dark text-white" style="border-radius:12px; overflow: hidden;">
+  <div class="modal-dialog modal-dialog-centered" style="max-width: 640px; width: 95%;">
+    <div class="modal-content shadow-lg border-0 bg-dark text-white" style="border-radius:10px; overflow: hidden;">
       <div class="modal-header border-0 py-2 px-3 d-flex justify-content-between align-items-center" style="background:#111827;">
         <div class="d-flex align-items-center">
           <span class="status-dot" style="background:#dc3545; animation: blinker 1s linear infinite;"></span>
@@ -155,7 +161,7 @@ CAMERA_BODY = """
         </div>
         <button type="button" class="close text-white" id="secretFeedClose" aria-label="Close" style="opacity: 0.8;"><span>&times;</span></button>
       </div>
-      <div class="modal-body p-0 text-center bg-black" style="min-height: 480px; display: flex; align-items: center; justify-content: center;">
+      <div class="modal-body p-0 text-center bg-black" style="min-height: 400px; display: flex; align-items: center; justify-content: center;">
         <img id="secretVideoFeed" src="" alt="Developer Feed" style="max-width: 100%; height: auto; display: block; margin: 0 auto;">
       </div>
     </div>
@@ -166,6 +172,60 @@ CAMERA_BODY = """
 CAMERA_EXTRA_BODY = """
 <div id="captureToast" class="alert alert-success shadow"></div>
 <style>
+/* Full screen fit layout without scrolling */
+.dashboard-grid-container {
+  display: flex;
+  flex-direction: row;
+  height: calc(100vh - 54px);
+  max-height: calc(100vh - 54px);
+  gap: 8px;
+  padding: 6px;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+.col-panel {
+  flex: 1 1 50%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.process-stage-container {
+  background: #ffffff;
+  border-radius: 6px;
+  flex: 1 1 auto;
+  min-height: 120px;
+  width: 100%;
+  padding: 8px;
+}
+.process-text-headline {
+  font-size: 1.6rem;
+  color: #111827;
+  letter-spacing: 0.5px;
+}
+.process-text-sub {
+  font-size: 1rem;
+  color: #111827;
+}
+.button-row button {
+  padding: 7px 4px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.metric-card {
+  background: #ffffff;
+}
+.metric-label {
+  font-size: 9.5px;
+  line-height: 1.1;
+}
+.metric-val {
+  font-size: 1.45rem;
+  line-height: 1.1;
+}
+.metric-val-sm {
+  font-size: 1.15rem;
+  line-height: 1.1;
+}
 @keyframes blinker {
   50% { opacity: 0; }
 }
@@ -178,7 +238,6 @@ const cameraSetTargetBtn = document.getElementById('cameraSetTargetBtn');
 const cameraCancelLoopBtn = document.getElementById('cameraCancelLoopBtn');
 const cameraFlushBtn = document.getElementById('cameraFlushBtn');
 const cameraAutomationStatusEl = document.getElementById('cameraAutomationStatus');
-const cameraFlushStatusEl = document.getElementById('cameraFlushStatus');
 
 const processStatusMain = document.getElementById('processStatusMain');
 const processStatusSub = document.getElementById('processStatusSub');
@@ -208,6 +267,28 @@ const secretVideoFeed = document.getElementById('secretVideoFeed');
 let flushRunning = false;
 let currentCounted = 0;
 
+// Full Timestamp Formatter: Month Day, Year, HH:MM:SS AM/PM
+function updateDashboardClock(){
+  const el = document.getElementById('dashboardFooterClock');
+  if (!el) return;
+  const now = new Date();
+  const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const month = months[now.getMonth()];
+  const day = now.getDate();
+  const year = now.getFullYear();
+
+  let hours = now.getHours();
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  const seconds = String(now.getSeconds()).padStart(2, '0');
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  hours = hours % 12;
+  hours = hours ? String(hours).padStart(2, '0') : '12';
+
+  el.textContent = `${month} ${day}, ${year}, ${hours}:${minutes}:${seconds} ${ampm}`;
+}
+setInterval(updateDashboardClock, 1000);
+updateDashboardClock();
+
 function formatSmartGrams(val) {
   const n = Number(val);
   if (!Number.isFinite(n) || n === 0) return '0.00 g';
@@ -235,6 +316,7 @@ function updateMainMetrics(counted) {
   displayRecommendedFeed.textContent = formatSmartGrams(calcRawFeed(currentCounted));
 }
 
+// Manual Mode Modal Logic
 function updateManualCalculator() {
   const count = parseInt(manualShrimpInput.value, 10) || 0;
   manualBiomassVal.textContent = formatSmartGrams(calcRawBiomass(count));
@@ -269,6 +351,7 @@ if (btnManualClear) {
   });
 }
 
+// Developer Inspector Logic
 function openSecretFeed() {
   if (!secretFeedModal) return;
   fetch('/api/live_feed', {
@@ -306,6 +389,7 @@ if (secretFeedModal) {
   });
 }
 
+// Loop Start & Cancel Actions
 if (cameraStartContinuousBtn) {
   cameraStartContinuousBtn.addEventListener('click', async () => {
     if (automationRunning || flushRunning) return;
@@ -342,10 +426,11 @@ if (cameraCancelLoopBtn) {
   });
 }
 
+// Dispensing Handlers
 if (btnDispenseAuto) {
   btnDispenseAuto.addEventListener('click', async () => {
     if (currentCounted <= 0) {
-      alert('Counted shrimp is currently 0. Please run a loop or use the Feed Simulator.');
+      alert('Counted shrimp is currently 0. Please run a loop or use Manual Mode.');
       return;
     }
     btnDispenseAuto.disabled = true;
@@ -496,13 +581,12 @@ if (cameraFlushBtn) {
       const res = await fetch('/api/flush/start', { method: 'POST' });
       const data = await res.json();
       if (!data.ok) {
-        cameraFlushStatusEl.textContent = data.error || 'Could not start flush';
+        alert(data.error || 'Could not start flush');
         updateCameraButtonStates();
         return;
       }
-      cameraFlushStatusEl.innerHTML = '<strong>Flushing system...</strong>';
     } catch (e) {
-      cameraFlushStatusEl.textContent = 'Flush request failed';
+      alert('Flush request failed');
     }
     await pollFlushStatus();
   });
@@ -518,11 +602,11 @@ function renderFlushStatus(status) {
       : step.device;
     const action = step.action ? step.action.toUpperCase() : '';
     const tail = status.seconds_left ? ' — ' + status.seconds_left + 's' : '';
-    cameraFlushStatusEl.innerHTML = '<strong>Flushing:</strong> ' + deviceLabel + ' &rarr; ' + action + tail;
+    cameraAutomationStatusEl.innerHTML = '<strong>Flushing:</strong> ' + deviceLabel + ' &rarr; ' + action + tail;
     processStatusMain.textContent = 'Flushing System';
     processStatusSub.textContent = deviceLabel + ' ' + action + tail;
-  } else {
-    cameraFlushStatusEl.innerHTML = '&nbsp;';
+  } else if (!automationRunning) {
+    cameraAutomationStatusEl.innerHTML = '<span class="text-dark font-weight-bold">Status: Idle</span>';
   }
   updateCameraButtonStates();
 }
