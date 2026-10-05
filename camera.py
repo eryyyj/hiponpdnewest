@@ -1,8 +1,8 @@
 """
-Camera page (/) - ShrimpSense Aquaculture Dashboard
-- Left Stage with action row and bottom status/clock footer
-- Right panel with metrics and bottom-anchored Dispense Feed + Manual Mode action group
-- Developer dataset collection modal accessible via double-clicking brand title
+Camera page (/) - ShrimpSense Industrial Touchscreen HMI
+- Preserves the right panel two-section layout with bottom-anchored actions
+- Bottom row alignment: Manual Mode height/border matches Telemetry bar
+- Reliable double-click/double-tap trigger for Developer Mode modal
 """
 
 from flask import Blueprint, Response
@@ -48,7 +48,7 @@ CAMERA_BODY = """
 
   </section>
 
-  <!-- Right Side: Metrics & Bottom-Anchored Actions -->
+  <!-- Right Side: Two Sections (Metrics + Bottom-Anchored Actions) -->
   <section class="hmi-panel hmi-panel-right">
     
     <!-- Information Section -->
@@ -94,14 +94,14 @@ CAMERA_BODY = """
 <div class="modal" id="shrimpTargetModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered" style="max-width: 440px; width: 95%;">
     <div class="modal-content shadow border-0" style="border-radius:12px; padding:20px;">
-      <div class="d-flex justify-content-between align-items-center mb-3">
+      <div class="d-flex justify-content-between align-items-center mb-2">
         <h5 class="font-weight-bold text-dark m-0">Target Shrimp Count</h5>
         <button type="button" class="close" id="shrimpModalClose" aria-label="Close"><span>&times;</span></button>
       </div>
 
       <div>
         <label for="shrimpTargetInput" class="hmi-metric-label mb-1">Set Desired Count</label>
-        <input type="text" inputmode="none" autocomplete="off" class="form-control text-center font-weight-bold text-dark mb-3" style="font-size:1.6rem; height:48px;" id="shrimpTargetInput" placeholder="0" readonly>
+        <input type="text" inputmode="none" autocomplete="off" class="form-control text-center font-weight-bold text-dark mb-2" style="font-size:1.6rem; height:48px;" id="shrimpTargetInput" placeholder="0" readonly>
 
         <div class="hmi-dialog-keypad mb-3">
           <button type="button" class="hmi-key-btn" data-val="1">1</button>
@@ -115,7 +115,7 @@ CAMERA_BODY = """
           <button type="button" class="hmi-key-btn" data-val="9">9</button>
           <button type="button" class="hmi-key-btn hmi-key-fn" id="targetKeyClear">CLR</button>
           <button type="button" class="hmi-key-btn" data-val="0">0</button>
-          <button type="button" class="hmi-key-btn hmi-key-fn" id="targetKeyBack">&#9003;</button>
+          <button type="button" class="hmi-key-btn" data-val="back">&#9003;</button>
         </div>
 
         <div class="d-flex" style="gap:10px;">
@@ -127,40 +127,43 @@ CAMERA_BODY = """
   </div>
 </div>
 
-<!-- Manual Mode Modal -->
+<!-- Manual Mode Modal (Feed Simulator) -->
 <div class="modal" id="manualFeedModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered" style="max-width: 480px; width: 95%;">
-    <div class="modal-content shadow border-0" style="border-radius:12px; padding:20px;">
-      <div class="d-flex justify-content-between align-items-center mb-3">
-        <h5 class="font-weight-bold text-dark m-0">Manual Feed Simulation</h5>
+    <div class="modal-content shadow-lg border-0" style="border-radius:12px;">
+      <div class="modal-header border-bottom py-2">
+        <h5 class="modal-title font-weight-bold text-dark">Feed Simulator &bull; Manual Mode</h5>
         <button type="button" class="close" id="manualFeedModalClose" aria-label="Close"><span>&times;</span></button>
       </div>
-
-      <div>
-        <label for="manualShrimpInput" class="hmi-metric-label mb-1">Enter Shrimp Count</label>
-        <div class="input-group mb-3">
-          <input id="manualShrimpInput" type="text" inputmode="none" autocomplete="off" class="form-control text-center font-weight-bold text-dark" style="font-size:1.5rem; height:48px;" placeholder="0">
+      <div class="modal-body p-3">
+        <label for="manualShrimpInput" class="text-dark font-weight-bold small text-uppercase mb-1">Enter Shrimp Count</label>
+        <div class="input-group mb-2">
+          <input id="manualShrimpInput" type="text" inputmode="none" autocomplete="off" class="form-control text-center font-weight-bold text-dark" style="font-size:1.5rem; height:46px;" placeholder="0">
           <div class="input-group-append">
-            <button class="btn btn-outline-secondary font-weight-bold px-3" type="button" id="btnManualClear">Clear</button>
+            <button class="btn btn-outline-secondary font-weight-bold text-dark" type="button" id="btnManualClear">Clear</button>
           </div>
         </div>
 
-        <div class="hmi-metric-grid mb-3">
-          <div class="hmi-card hmi-metric-card-split bg-light">
-            <div class="hmi-metric-label">Total Biomass</div>
-            <div id="manualBiomassVal" class="hmi-metric-value-sm">0.00 g</div>
+        <div class="row mb-3" style="margin:0 -4px;">
+          <div class="col-6 px-1">
+            <div class="p-2 border rounded bg-light text-center h-100">
+              <small class="text-dark d-block font-weight-bold">Biomass</small>
+              <strong id="manualBiomassVal" class="text-dark" style="font-size:1.15rem;">0.00 g</strong>
+            </div>
           </div>
-          <div class="hmi-card hmi-metric-card-split bg-light">
-            <div class="hmi-metric-label">Recommended Feed</div>
-            <div id="manualFeedVal" class="hmi-metric-value-sm">0.00 g</div>
+          <div class="col-6 px-1">
+            <div class="p-2 border rounded bg-light text-center h-100">
+              <small class="text-dark d-block font-weight-bold">Recommended Feed</small>
+              <strong id="manualFeedVal" class="text-dark" style="font-size:1.15rem;">0.00 g</strong>
+            </div>
           </div>
         </div>
 
-        <div class="d-flex" style="gap:10px;">
-          <button type="button" id="btnManualDispense" class="btn btn-danger flex-fill font-weight-bold py-2" style="height:48px;">
+        <div class="d-flex" style="gap:8px;">
+          <button type="button" id="btnManualDispense" class="btn btn-danger flex-grow-1 font-weight-bold py-2">
             Dispense Feed
           </button>
-          <button type="button" id="btnManualStop" class="btn btn-outline-danger flex-fill font-weight-bold py-2" style="height:48px;">
+          <button type="button" id="btnManualStop" class="btn btn-outline-danger font-weight-bold px-4">
             Stop
           </button>
         </div>
@@ -169,7 +172,7 @@ CAMERA_BODY = """
   </div>
 </div>
 
-<!-- Developer Mode Modal -->
+<!-- Developer Dataset Collector / CV Inspector Modal -->
 <div class="modal" id="developerModeModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered" style="max-width: 1240px; width: 98%; height: 95%;">
     <div class="modal-content d-flex flex-column h-100 p-0 overflow-hidden bg-dark text-white border-secondary" style="border-radius:12px;">
@@ -177,9 +180,9 @@ CAMERA_BODY = """
       <div class="d-flex justify-content-between align-items-center px-3 py-2 bg-black border-bottom border-secondary" style="height: 42px;">
         <div class="d-flex align-items-center">
           <span class="status-dot" id="devRecDot" style="background:#64748b;"></span>
-          <span class="small font-weight-bold ml-2 text-light">DIAGNOSTIC &bull; SHRIMP CV DATASET STUDIO</span>
+          <span class="small font-weight-bold ml-2 text-light">DEVELOPER CV INSPECTOR &bull; DATASET COLLECTOR</span>
         </div>
-        <span class="small font-weight-bold text-muted">Raspberry Pi Hardware Camera Inspector</span>
+        <span class="small font-weight-bold text-muted">Raspberry Pi Live Diagnostic</span>
       </div>
 
       <div class="dev-stream-viewport">
@@ -331,9 +334,9 @@ CAMERA_EXTRA_BODY = """
 .hmi-touch-btn:active { transform: scale(0.98); }
 .hmi-action-row .hmi-touch-btn { flex: 1; height: 100%; }
 
-.hmi-btn-primary { background: var(--shrimp-red); color: #ffffff; border-color: #b91c1c; }
+.hmi-btn-primary { background: #D82B27; color: #ffffff; border-color: #b91c1c; }
 .hmi-btn-primary:active { background: #991b1b; }
-.hmi-btn-accent { background: var(--shrimp-orange); color: #ffffff; border-color: #ea580c; }
+.hmi-btn-accent { background: #F1691F; color: #ffffff; border-color: #ea580c; }
 .hmi-btn-accent:active { background: #c2410c; }
 .hmi-btn-danger { background: #ffffff; color: #dc2626; border: 2px solid #ef4444; }
 .hmi-btn-danger:active { background: #fee2e2; }
@@ -558,7 +561,6 @@ const shrimpModalCancel = document.getElementById('shrimpModalCancel');
 const shrimpModalSubmit = document.getElementById('shrimpModalSubmit');
 const shrimpTargetInput = document.getElementById('shrimpTargetInput');
 const targetKeyClear = document.getElementById('targetKeyClear');
-const targetKeyBack = document.getElementById('targetKeyBack');
 
 let flushRunning = false;
 let currentCounted = 0;
@@ -625,16 +627,16 @@ if (shrimpModalCancel) shrimpModalCancel.addEventListener('click', closeTargetMo
 
 document.querySelectorAll('.hmi-key-btn[data-val]').forEach(btn => {
   btn.addEventListener('click', () => {
-    shrimpTargetInput.value = (shrimpTargetInput.value || '') + btn.getAttribute('data-val');
+    const val = btn.getAttribute('data-val');
+    if (val === 'back') {
+      shrimpTargetInput.value = String(shrimpTargetInput.value || '').slice(0, -1);
+    } else {
+      shrimpTargetInput.value = (shrimpTargetInput.value || '') + val;
+    }
   });
 });
 if (targetKeyClear) {
   targetKeyClear.addEventListener('click', () => { shrimpTargetInput.value = ''; });
-}
-if (targetKeyBack) {
-  targetKeyBack.addEventListener('click', () => {
-    shrimpTargetInput.value = shrimpTargetInput.value.slice(0, -1);
-  });
 }
 if (shrimpModalSubmit) {
   shrimpModalSubmit.addEventListener('click', async () => {
@@ -689,6 +691,9 @@ if (btnManualClear) {
   });
 }
 
+/* =========================================================
+   Developer Mode Event Delegation & Controller
+   ========================================================= */
 const devModeModal = document.getElementById('developerModeModal');
 const devVideoFeed = document.getElementById('devVideoFeed');
 const btnExitDevMode = document.getElementById('btnExitDevMode');
@@ -712,16 +717,18 @@ function openDeveloperMode() {
     body: JSON.stringify({ enabled: true })
   }).catch(() => {});
   
-  devVideoFeed.src = '/video_feed';
+  if (devVideoFeed) devVideoFeed.src = '/video_feed';
   devModeModal.classList.add('show');
+  devModeModal.style.display = 'flex';
   refreshDevTelemetry();
 }
 
 function closeDeveloperMode() {
   if (!devModeModal) return;
   if (devIsRecording) stopDevRecording();
-  devVideoFeed.src = '';
+  if (devVideoFeed) devVideoFeed.src = '';
   devModeModal.classList.remove('show');
+  devModeModal.style.display = 'none';
   
   fetch('/api/live_feed', {
     method: 'POST',
@@ -741,13 +748,26 @@ async function refreshDevTelemetry() {
   } catch(e) {}
 }
 
-const secretBrandToggle = document.getElementById('secretFeedToggle');
-if (secretBrandToggle) {
-  secretBrandToggle.addEventListener('dblclick', (e) => {
+// Intercept single vs double click on brand button
+let brandClickTimer = null;
+document.addEventListener('click', (e) => {
+  const toggle = e.target.closest('#secretFeedToggle');
+  if (!toggle) return;
+
+  if (window.location.pathname === '/' || window.location.pathname === '') {
     e.preventDefault();
-    openDeveloperMode();
-  });
-}
+    if (!brandClickTimer) {
+      brandClickTimer = setTimeout(() => {
+        brandClickTimer = null;
+      }, 350);
+    } else {
+      clearTimeout(brandClickTimer);
+      brandClickTimer = null;
+      openDeveloperMode();
+    }
+  }
+});
+
 if (btnExitDevMode) btnExitDevMode.addEventListener('click', closeDeveloperMode);
 
 function startDevRecording() {

@@ -118,12 +118,12 @@ CAMERA_SETTINGS_PATH = os.path.join(
 
 DEFAULT_ROI = {"left": 0.0, "top": 0.0, "right": 1.0, "bottom": 1.0}
 ROI_MIN_SIZE = 0.05
-ROI_COLOR = (241, 105, 31)
+ROI_COLOR = (255, 200, 0)
 
 DETECTION_BOX_COLOR = (0, 255, 0)
-DETECTION_CENTROID_COLOR = (216, 43, 39)
+DETECTION_CENTROID_COLOR = (255, 0, 0)
 DETECTION_LABEL_COLOR = (255, 255, 255)
-DETECTED_COUNT_TEXT_COLOR = (0, 0, 0)
+DETECTED_COUNT_TEXT_COLOR = (0, 255, 255)
 
 AUTOMATION_DEFAULT_STATE = [
     {"device": "servo1", "action": "close"},
@@ -148,7 +148,7 @@ SERVO2_OPEN_DEG = 0
 SERVO2_CLOSE_DEG = 140
 
 SPLASH_IMAGE_PATH = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "assets", "ShrimpSenseLogo.png"
+    os.path.dirname(os.path.abspath(__file__)), "assets", "images", "landing.png"
 )
 SPLASH_DURATION_MS = 2500
 SPLASH_BG_COLOR = "white"
@@ -162,47 +162,23 @@ KIOSK_BROWSER_CANDIDATES = [
 
 PAGE_STYLE = """
 <style>
-  :root {
-    --shrimp-red: #D82B27;
-    --shrimp-orange: #F1691F;
-    --marine-dark: #0f172a;
-    --marine-light: #f8fafc;
-  }
-
-  html, body {
+  body {
     font-family: 'Lato', sans-serif;
-    background-color: #f4f8fa;
-    color: #111827;
+    background-color: #ffffff;
     margin: 0;
     padding: 0;
-    height: 100%;
-    overflow: hidden;
   }
-
   .content-wrapper {
-    background-color: #f4f8fa;
+    background-color: #ffffff;
     position: relative;
   }
-
-  .wrapper { background-color: #f4f8fa; }
-
-  /* Restored Navbar Styling */
-  .main-header {
-    height: 56px;
+  .wrapper {
     background-color: #ffffff;
-    border-bottom: 1px solid #dee2e6;
-  }
-
-  .hmi-brand {
-    display: flex;
-    align-items: center;
-    cursor: pointer;
-    text-decoration: none !important;
   }
 
   .gallery-item { cursor: pointer; }
   .gallery-item img { width: 100%; height: 120px; object-fit: cover; border-radius: 4px; }
-  .gallery-item .caption { font-size: 11px; color: #111827; margin-top: 2px; }
+  .gallery-item .caption { font-size: 11px; color: #6c757d; margin-top: 2px; }
 
   .lightbox {
     position: fixed; inset: 0; background: rgba(0,0,0,0.9);
@@ -213,20 +189,52 @@ PAGE_STYLE = """
   .lightbox .lightbox-close { position: absolute; top: 16px; right: 24px; font-size: 32px; color: #fff; cursor: pointer; }
   .lightbox .lightbox-caption { position: absolute; bottom: 24px; left: 0; right: 0; text-align: center; color: #ddd; font-size: 12px; }
 
+  #captureToast {
+    position: fixed; top: 70px; left: 50%; transform: translateX(-50%);
+    z-index: 1060; opacity: 0; transition: opacity 0.3s; pointer-events: none;
+  }
+  #captureToast.show { opacity: 1; }
+
   .status-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; margin-right: 5px; background: #dc3545; }
   .status-dot.on { background: #28a745; }
 
   /* Modals */
-  #shrimpTargetModal, #powerModal, #calibrationModal, #roiModal, #manualFeedModal, #developerModeModal {
-    display: none; position: fixed; inset: 0; z-index: 1080;
-    background: rgba(17, 24, 39, 0.6); align-items: center; justify-content: center;
+  #shrimpTargetModal {
+    display: none; position: fixed; inset: 0; z-index: 1060;
+    background: rgba(0,0,0,0.5); align-items: center; justify-content: center;
   }
-  #shrimpTargetModal.show, #powerModal.show, #calibrationModal.show, #roiModal.show, #manualFeedModal.show, #developerModeModal.show {
-    display: flex !important;
-  }
+  #shrimpTargetModal.show { display: flex; }
+  #shrimpTargetModal .modal-dialog { margin: 0; }
 
-  /* Restored ROI Modal styles */
-  .roi-preview { position: relative; width: 100%; background: #111; border-radius: 4px; overflow: hidden; margin-bottom: 10px; }
+  #powerModal {
+    display: none; position: fixed; inset: 0; z-index: 1080;
+    background: rgba(0,0,0,0.5); align-items: center; justify-content: center;
+  }
+  #powerModal.show { display: flex; }
+
+  #calibrationModal {
+    display: none; position: fixed; inset: 0; z-index: 1080;
+    background: rgba(0,0,0,0.5); align-items: center; justify-content: center;
+  }
+  #calibrationModal.show { display: flex; }
+  #calibrationModal .modal-dialog { margin: 0; max-width: 420px; width: 94%; }
+  #calibrationModal .modal-body { max-height: 70vh; overflow-y: auto; }
+
+  #manualFeedModal, #developerModeModal {
+    display: none; position: fixed; inset: 0; z-index: 1070;
+    background: rgba(0,0,0,0.5); align-items: center; justify-content: center;
+  }
+  #manualFeedModal.show, #developerModeModal.show { display: flex !important; }
+
+  /* Restored Original ROI Modal */
+  #roiModal {
+    display: none; position: fixed; inset: 0; z-index: 1080;
+    background: rgba(0,0,0,0.5); align-items: center; justify-content: center;
+  }
+  #roiModal.show { display: flex; }
+  #roiModal .modal-dialog { margin: 0; max-width: 520px; width: 96%; }
+  #roiModal .modal-body { max-height: 78vh; overflow-y: auto; }
+  .roi-preview { position: relative; width: 100%; background: #111; border-radius: 4px; overflow: hidden; margin-bottom: 10px; min-height: 60px; }
   .roi-preview img { display: block; width: 100%; height: auto; }
   .roi-box { position: absolute; border: 3px solid #ffc800; box-shadow: 0 0 0 9999px rgba(0,0,0,0.45); pointer-events: none; }
   .roi-slider-label { display: flex; justify-content: space-between; font-weight: 700; margin-top: 4px; }
@@ -234,17 +242,17 @@ PAGE_STYLE = """
   /* OSK */
   #osk {
     display: none; position: fixed; left: 0; right: 0; bottom: 0; z-index: 2000;
-    background: #111827; padding: 10px 12px 14px; box-shadow: 0 -6px 18px rgba(0,0,0,0.35);
+    background: #2b3035; padding: 10px 12px 14px; box-shadow: 0 -6px 18px rgba(0,0,0,0.35);
   }
   #osk.show { display: block; }
   #osk .osk-keys { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; max-width: 420px; margin: 0 auto; }
   #osk .osk-wide { grid-column: span 2; }
   #osk button {
     min-height: 48px; font-size: 22px; font-weight: 700; border: 0; border-radius: 8px;
-    background: #2C3E50; color: #fff;
+    background: #495057; color: #fff;
   }
-  #osk button.osk-action { background: #566573; }
-  #osk button.osk-ok { background: var(--shrimp-red); }
+  #osk button.osk-action { background: #6c757d; }
+  #osk button.osk-ok { background: #28a745; }
 </style>
 """
 
@@ -257,9 +265,9 @@ def render_nav_links(active):
     dashboard_active = "active font-weight-bold text-dark" if active == "camera" else "text-dark"
     brand_tab = f"""
     <li class="nav-item mr-3">
-      <a class="nav-link d-flex align-items-center {dashboard_active} hmi-brand" href="/" id="secretFeedToggle" title="Double click for developer feed">
-        <img src="/assets/ShrimpSenseLogo.png" alt="ShrimpSense" onerror="this.src='/assets/images/ShrimpSenseLogo.png'" style="height: 30px; width: auto;" class="mr-2">
-        <strong style="font-size:1.25rem;">ShrimpSense</strong>
+      <a class="nav-link d-flex align-items-center {dashboard_active}" href="/" id="secretFeedToggle" title="Double click for developer inspection">
+        <img src="/assets/ShrimpSenseLogo.png" alt="ShrimpSense" onerror="this.src='/assets/images/landing.png'" style="height: 32px; width: auto;" class="mr-2">
+        <strong style="font-size:1.15rem;">ShrimpSense</strong>
       </a>
     </li>
     """
@@ -300,11 +308,11 @@ async function refreshStatus(){
   if (data.connected){
     btn.textContent = 'Disconnect';
     btn.classList.remove('btn-success'); btn.classList.add('btn-danger');
-    dot.classList.add('on'); if(text) text.textContent = 'Connected: ' + data.port;
+    dot.classList.add('on'); if (text) text.textContent = 'Connected: ' + data.port;
   } else {
     btn.textContent = 'Connect';
     btn.classList.remove('btn-danger'); btn.classList.add('btn-success');
-    dot.classList.remove('on'); if(text) text.textContent = 'Disconnected';
+    dot.classList.remove('on'); if (text) text.textContent = 'Disconnected';
   }
 }
 
@@ -429,7 +437,7 @@ if (document.getElementById('calibrationModalSave')){
 const DEVICE_LABELS = { relay1:'Pump', relay2:'Feeder', servo1:'Gate 1', servo2:'Gate 2' };
 let automationRunning = false;
 
-// Restored ROI Logic
+// Restored Original ROI Logic
 const roiModal = document.getElementById('roiModal');
 const roiSliders = {
   left: document.getElementById('roiLeft'),
@@ -437,10 +445,11 @@ const roiSliders = {
   top: document.getElementById('roiTop'),
   bottom: document.getElementById('roiBottom'),
 };
+const ROI_MIN_PCT = 5;
 
 function roiClamp(changed){
   const L = roiSliders.left, R = roiSliders.right, T = roiSliders.top, B = roiSliders.bottom;
-  const maxSum = 95;
+  const maxSum = 100 - ROI_MIN_PCT;
   if (+L.value + +R.value > maxSum){
     if (changed === 'left') L.value = maxSum - +R.value; else R.value = maxSum - +L.value;
   }
@@ -475,6 +484,7 @@ function roiApply(data){
 }
 
 let roiPreviewTimer = null;
+
 function refreshRoiPreview(){
   const el = document.getElementById('roiPreviewImg');
   if (!el) return;
@@ -531,6 +541,7 @@ if (roiModal){
   }
 }
 
+// Touch Numpad
 const osk = document.getElementById('osk');
 let oskTarget = null;
 
@@ -616,7 +627,6 @@ def render_page(active, body, page_script, extra_body="", full_height=False):
 <body class="hold-transition layout-top-nav">
 <div class="wrapper">
 
-  <!-- Restored Original Bootstrap Navbar with Native Buttons -->
   <nav class="main-header navbar navbar-expand navbar-white navbar-light border-bottom px-2 shadow-sm">
     <div class="container-fluid">
       <ul class="navbar-nav align-items-center">
