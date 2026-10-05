@@ -127,12 +127,12 @@ CAMERA_BODY = """
   </div>
 </div>
 
-<!-- Manual Mode Modal (Feed Simulator) -->
+<!-- Manual Mode Modal -->
 <div class="modal" id="manualFeedModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered" style="max-width: 480px; width: 95%;">
     <div class="modal-content shadow-lg border-0" style="border-radius:12px;">
       <div class="modal-header border-bottom py-2">
-        <h5 class="modal-title font-weight-bold text-dark">Feed Simulator &bull; Manual Mode</h5>
+        <h5 class="modal-title font-weight-bold text-dark">Manual Mode</h5>
         <button type="button" class="close" id="manualFeedModalClose" aria-label="Close"><span>&times;</span></button>
       </div>
       <div class="modal-body p-3">
