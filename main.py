@@ -92,8 +92,7 @@ class PiCamCapture:
 
 CAMERA_RESOLUTION = (640, 640)
 SNAPSHOT_DIR = os.path.expanduser("~/esp32_snapshots")
-VIDEO_CAPTURE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "captures", "videos")
-os.makedirs(VIDEO_CAPTURE_DIR, exist_ok=True)
+DATASET_VIDEO_DIR = os.path.expanduser("~/shrimp_dataset_videos")
 
 _PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 YOLO_WEIGHTS_PATH = os.path.join(_PROJECT_ROOT, "models", "best.pt")
@@ -166,89 +165,130 @@ PAGE_STYLE = """
   :root {
     --shrimp-red: #D82B27;
     --shrimp-orange: #F1691F;
-    --marine-dark: #111827;
-    --marine-light: #F4F8FA;
+    --marine-dark: #0f172a;
+    --marine-light: #f8fafc;
+    --panel-border: #cbd5e1;
   }
 
+  * { box-sizing: border-box; }
+
   body {
-    font-family: 'Lato', sans-serif;
-    background-color: var(--marine-light);
-    color: #111827;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background-color: #f1f5f9;
+    color: #0f172a;
     margin: 0;
     padding: 0;
     overflow: hidden;
-  }
-  .content-wrapper {
-    background-color: var(--marine-light);
-    position: relative;
-    padding: 0 !important;
-    margin: 0 !important;
-  }
-  .wrapper { background-color: var(--marine-light); }
-
-  .text-marine { color: #111827 !important; }
-  .text-shrimp { color: #111827 !important; }
-
-  .btn-shrimp-primary {
-    background-color: var(--shrimp-red);
-    border-color: var(--shrimp-red);
-    color: #fff;
-  }
-  .btn-shrimp-primary:hover, .btn-shrimp-primary:focus {
-    background-color: #B71E1A;
-    border-color: #B71E1A;
-    color: #fff;
-  }
-  .btn-shrimp-accent {
-    background-color: var(--shrimp-orange);
-    border-color: var(--shrimp-orange);
-    color: #fff;
-  }
-  .btn-shrimp-accent:hover {
-    background-color: #D35400;
-    border-color: #D35400;
-    color: #fff;
-  }
-  .btn-outline-marine {
-    color: #111827;
-    border-color: #111827;
-  }
-  .btn-outline-marine:hover {
-    background-color: #111827;
-    color: #fff;
+    user-select: none;
+    -webkit-user-select: none;
   }
 
-  .gallery-item { cursor: pointer; }
-  .gallery-item img { width: 100%; height: 120px; object-fit: cover; border-radius: 4px; }
-  .gallery-item .caption { font-size: 11px; color: #111827; margin-top: 2px; }
-
-  .lightbox {
-    position: fixed; inset: 0; background: rgba(0,0,0,0.9);
-    display: flex; align-items: center; justify-content: center; z-index: 1050;
+  /* Compact Industrial Header (No "Dashboard" in Title) */
+  .hmi-header {
+    height: 56px;
+    background: #ffffff;
+    border-bottom: 2px solid var(--panel-border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 14px;
   }
-  .lightbox.hidden { display: none; }
-  .lightbox img { max-width: 92%; max-height: 82%; border-radius: 6px; }
-  .lightbox .lightbox-close { position: absolute; top: 16px; right: 24px; font-size: 32px; color: #fff; cursor: pointer; }
-  .lightbox .lightbox-caption { position: absolute; bottom: 24px; left: 0; right: 0; text-align: center; color: #ddd; font-size: 12px; }
-
-  #captureToast {
-    position: fixed; top: 70px; left: 50%; transform: translateX(-50%);
-    z-index: 1060; opacity: 0; transition: opacity 0.3s; pointer-events: none;
+  .hmi-brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    text-decoration: none;
+    color: #0f172a !important;
+    cursor: pointer;
   }
-  #captureToast.show { opacity: 1; }
+  .hmi-brand img {
+    height: 30px;
+    width: auto;
+  }
+  .hmi-brand-title {
+    font-size: 1.25rem;
+    font-weight: 900;
+    letter-spacing: -0.3px;
+  }
 
-  .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 4px; background: #dc3545; }
-  .status-dot.on { background: #28a745; }
+  .hmi-nav-pills {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .hmi-nav-btn {
+    height: 38px;
+    padding: 0 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.95rem;
+    font-weight: 700;
+    border-radius: 6px;
+    text-decoration: none !important;
+    border: 1px solid #cbd5e1;
+    background: #f8fafc;
+    color: #334155 !important;
+    touch-action: manipulation;
+  }
+  .hmi-nav-btn.active {
+    background: #0f172a;
+    color: #ffffff !important;
+    border-color: #0f172a;
+  }
 
-  #shrimpTargetModal, #powerModal, #calibrationModal, #roiModal, #manualFeedModal, #secretFeedModal {
+  .hmi-hardware-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .hmi-select {
+    height: 38px;
+    font-weight: 700;
+    font-size: 0.9rem;
+    padding: 2px 8px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    background: #f8fafc;
+    color: #0f172a;
+  }
+
+  .hmi-btn-sm {
+    height: 38px;
+    padding: 0 12px;
+    font-size: 0.9rem;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+
+  .status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #ef4444;
+    display: inline-block;
+  }
+  .status-dot.on { background: #22c55e; }
+
+  /* Modals Standard: 24px Outer Padding, 16px Section Spacing, 12px Control Gap */
+  #shrimpTargetModal, #powerModal, #calibrationModal, #roiModal, #manualFeedModal, #developerModeModal {
     display: none; position: fixed; inset: 0; z-index: 1080;
-    background: rgba(17, 24, 39, 0.6); align-items: center; justify-content: center;
+    background: rgba(15, 23, 42, 0.7); align-items: center; justify-content: center;
   }
-  #shrimpTargetModal.show, #powerModal.show, #calibrationModal.show, #roiModal.show, #manualFeedModal.show, #secretFeedModal.show {
+  #shrimpTargetModal.show, #powerModal.show, #calibrationModal.show, #roiModal.show, #manualFeedModal.show, #developerModeModal.show {
     display: flex !important;
   }
-  #shrimpTargetModal .modal-dialog, #powerModal .modal-dialog, #calibrationModal .modal-dialog, #roiModal .modal-dialog, #manualFeedModal .modal-dialog {
-    margin: 0; max-width: 440px; width: 94%;
+  #powerModal .modal-dialog, #calibrationModal .modal-dialog, #roiModal .modal-dialog {
+    margin: 0; max-width: 460px; width: 94%;
   }
 
   .roi-preview { position: relative; width: 100%; background: #111; border-radius: 4px; overflow: hidden; margin-bottom: 10px; }
@@ -256,44 +296,54 @@ PAGE_STYLE = """
   .roi-box { position: absolute; border: 3px solid var(--shrimp-orange); box-shadow: 0 0 0 9999px rgba(0,0,0,0.45); pointer-events: none; }
   .roi-slider-label { display: flex; justify-content: space-between; font-weight: 700; margin-top: 4px; }
 
+  /* On-screen Keypad */
   #osk {
     display: none; position: fixed; left: 0; right: 0; bottom: 0; z-index: 2000;
-    background: #111827; padding: 10px 12px 14px; box-shadow: 0 -6px 18px rgba(0,0,0,0.35);
+    background: #0f172a; padding: 12px; box-shadow: 0 -6px 20px rgba(0,0,0,0.4);
   }
   #osk.show { display: block; }
-  #osk .osk-keys { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; max-width: 420px; margin: 0 auto; }
+  #osk .osk-keys { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; max-width: 440px; margin: 0 auto; }
   #osk .osk-wide { grid-column: span 2; }
   #osk button {
-    min-height: 48px; font-size: 22px; font-weight: 700; border: 0; border-radius: 8px;
-    background: #2C3E50; color: #fff;
+    min-height: 52px; font-size: 24px; font-weight: 700; border: 0; border-radius: 8px;
+    background: #334155; color: #fff;
   }
-  #osk button.osk-action { background: #566573; }
+  #osk button.osk-action { background: #475569; }
   #osk button.osk-ok { background: var(--shrimp-red); }
 </style>
 """
 
-NAV_TABS = [
-    ("controls", "/controls", "Controls"),
-    ("gallery", "/gallery", "Gallery"),
-]
-
-
-def render_nav_links(active):
-    dashboard_active = "active font-weight-bold text-dark" if active == "camera" else "text-dark"
-    brand_tab = f"""
-    <li class="nav-item mr-3">
-      <a class="nav-link d-flex align-items-center {dashboard_active}" href="/" id="secretFeedToggle" title="Double click for developer feed">
-        <img src="/assets/ShrimpSenseLogo.png" alt="ShrimpSense" onerror="this.src='/assets/images/ShrimpSenseLogo.png'" style="height: 28px; width: auto;" class="mr-2">
-        <strong style="font-size:1.15rem;">ShrimpSense</strong>
-      </a>
-    </li>
-    """
+def render_header(active):
+    controls_active = "active" if active == "controls" else ""
+    gallery_active = "active" if active == "gallery" else ""
     
-    links = [brand_tab]
-    for key, href, label in NAV_TABS:
-        cls = "nav-link active font-weight-bold text-dark" if key == active else "nav-link font-weight-bold text-muted"
-        links.append(f'<li class="nav-item"><a class="{cls}" href="{href}">{label}</a></li>')
-    return "\n        ".join(links)
+    return f"""
+    <header class="hmi-header">
+      <div class="d-flex align-items-center">
+        <!-- Double click logo/title opens Hidden Developer Mode -->
+        <a class="hmi-brand mr-3" href="javascript:void(0)" id="secretFeedToggle" title="Double click for developer inspection">
+          <img src="/assets/ShrimpSenseLogo.png" alt="ShrimpSense" onerror="this.src='/assets/images/ShrimpSenseLogo.png'">
+          <span class="hmi-brand-title">ShrimpSense</span>
+        </a>
+        <ul class="hmi-nav-pills">
+          <li><a class="hmi-nav-btn {controls_active}" href="/controls">Controls</a></li>
+          <li><a class="hmi-nav-btn {gallery_active}" href="/gallery">Gallery</a></li>
+          <li><button id="calibrationBtn" class="hmi-nav-btn">Calibration</button></li>
+          <li><button id="roiBtn" class="hmi-nav-btn">ROI</button></li>
+        </ul>
+      </div>
+
+      <div class="hmi-hardware-group">
+        <select id="portSelect" class="hmi-select"></select>
+        <button id="refreshBtn" class="hmi-btn-sm btn-light border" title="Refresh ports">&#8635;</button>
+        <button id="connectBtn" class="hmi-btn-sm btn-success">Connect</button>
+        <div class="d-flex align-items-center ml-1 mr-2">
+          <span id="statusDot" class="status-dot"></span>
+        </div>
+        <button id="shutdownBtn" class="hmi-btn-sm btn-outline-danger">Power</button>
+      </div>
+    </header>
+    """
 
 
 COMMON_SCRIPT = """
@@ -321,15 +371,14 @@ async function refreshStatus(){
   const data = await res.json();
   const btn = document.getElementById('connectBtn');
   const dot = document.getElementById('statusDot');
-  const text = document.getElementById('statusText');
   if (data.connected){
     btn.textContent = 'Disconnect';
-    btn.classList.remove('btn-success'); btn.classList.add('btn-danger');
-    dot.classList.add('on'); text.textContent = 'Connected: ' + data.port;
+    btn.className = 'hmi-btn-sm btn-danger';
+    dot.classList.add('on');
   } else {
     btn.textContent = 'Connect';
-    btn.classList.remove('btn-danger'); btn.classList.add('btn-success');
-    dot.classList.remove('on'); text.textContent = 'Disconnected';
+    btn.className = 'hmi-btn-sm btn-success';
+    dot.classList.remove('on');
   }
 }
 
@@ -454,49 +503,7 @@ if (document.getElementById('calibrationModalSave')){
 const DEVICE_LABELS = { relay1:'Pump', relay2:'Feeder', servo1:'Gate 1', servo2:'Gate 2' };
 let automationRunning = false;
 
-const shrimpTargetModal = document.getElementById('shrimpTargetModal');
-const shrimpTargetInput = document.getElementById('shrimpTargetInput');
-
-function openShrimpTargetModal(){
-  if (!shrimpTargetModal) return;
-  shrimpTargetInput.value = '';
-  shrimpTargetModal.classList.add('show');
-  setTimeout(() => shrimpTargetInput.focus(), 50);
-}
-
-function closeShrimpTargetModal(){
-  if (!shrimpTargetModal) return;
-  shrimpTargetModal.classList.remove('show');
-}
-
-if (document.getElementById('shrimpModalClose')) document.getElementById('shrimpModalClose').addEventListener('click', closeShrimpTargetModal);
-if (document.getElementById('shrimpModalCancel')) document.getElementById('shrimpModalCancel').addEventListener('click', closeShrimpTargetModal);
-if (shrimpTargetModal) shrimpTargetModal.addEventListener('click', (e) => { if (e.target === shrimpTargetModal) closeShrimpTargetModal(); });
-
-if (document.getElementById('shrimpModalSubmit')) {
-  document.getElementById('shrimpModalSubmit').addEventListener('click', async () => {
-    const value = parseInt(shrimpTargetInput.value, 10);
-    if (!value || value <= 0){
-      alert('Enter a valid total number of shrimp (greater than 0).');
-      return;
-    }
-    closeShrimpTargetModal();
-    try{
-      await fetch('/api/automation/start', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({target_count: value})
-      });
-    } catch(e){}
-  });
-}
-
-if (shrimpTargetInput) {
-  shrimpTargetInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') document.getElementById('shrimpModalSubmit').click();
-  });
-}
-
-// ROI Editor
+// ROI Modal
 const roiModal = document.getElementById('roiModal');
 const roiSliders = {
   left: document.getElementById('roiLeft'),
@@ -598,12 +605,12 @@ if (roiModal){
   }
 }
 
-// Touch Numpad
+// Touchscreen OSK for fallback inputs
 const osk = document.getElementById('osk');
 let oskTarget = null;
 
 function showOsk(input){
-  if (!input || input.disabled) return;
+  if (!input || input.disabled || input.readOnly) return;
   oskTarget = input;
   osk.classList.add('show');
 }
@@ -639,7 +646,7 @@ if (osk){
 
 function bindOskInputs(){
   document.querySelectorAll('input[type="number"], input[type="text"], input:not([type])').forEach((input) => {
-    if (input.dataset.oskBound) return;
+    if (input.dataset.oskBound || input.id === 'shrimpTargetInput') return;
     input.dataset.oskBound = '1';
     input.setAttribute('inputmode', 'none');
     input.setAttribute('autocomplete', 'off');
@@ -666,7 +673,6 @@ loadCalibration();
 setInterval(() => { refreshPorts(); refreshStatus(); }, 2000);
 """
 
-
 def render_page(active, body, page_script, extra_body="", full_height=False):
     return f"""
 <!DOCTYPE html>
@@ -676,79 +682,53 @@ def render_page(active, body, page_script, extra_body="", full_height=False):
 <meta http-equiv="Cache-Control" content="no-store">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>ShrimpSense</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/admin-lte@3.2.0/dist/css/adminlte.min.css">
 {PAGE_STYLE}
 </head>
-<body class="hold-transition layout-top-nav">
-<div class="wrapper">
+<body>
+<div class="hmi-viewport">
 
-  <nav class="main-header navbar navbar-expand navbar-white navbar-light border-bottom px-2 shadow-sm" style="min-height: 48px; padding-top: 3px; padding-bottom: 3px;">
-    <div class="container-fluid">
-      <ul class="navbar-nav align-items-center">
-        {render_nav_links(active)}
-        <li class="nav-item ml-2">
-          <button id="calibrationBtn" class="btn btn-outline-secondary btn-sm mr-1 font-weight-bold text-dark py-1">Calibration</button>
-          <button id="roiBtn" class="btn btn-outline-secondary btn-sm font-weight-bold text-dark py-1">ROI</button>
-        </li>
-      </ul>
+  {render_header(active)}
 
-      <ul class="navbar-nav ml-auto align-items-center flex-nowrap">
-        <li class="nav-item px-1">
-          <select id="portSelect" class="custom-select custom-select-sm text-dark font-weight-bold" style="width:auto;"></select>
-        </li>
-        <li class="nav-item px-1">
-          <button id="refreshBtn" class="btn btn-sm btn-outline-secondary text-dark font-weight-bold" title="Refresh ports">&#8635;</button>
-        </li>
-        <li class="nav-item px-1">
-          <button id="connectBtn" class="btn btn-sm btn-success font-weight-bold py-1">Connect</button>
-        </li>
-        <li class="nav-item px-2 d-flex align-items-center">
-          <span id="statusDot" class="status-dot"></span>
-          <small id="statusText" class="text-dark font-weight-bold d-none d-md-inline" style="font-size:12px;">Disconnected</small>
-        </li>
-        <li class="nav-item px-1">
-          <button id="shutdownBtn" class="btn btn-sm btn-outline-danger font-weight-bold py-1" title="Power">&#9211; Power</button>
-        </li>
-      </ul>
-    </div>
-  </nav>
-
-  <div class="content-wrapper">
-    <div class="content" style="padding: 0 !important;">
-      <div class="container-fluid" style="padding: 0 !important;">
-{body}
-      </div>
-    </div>
-  </div>
+  <main class="hmi-content-container">
+    {body}
+  </main>
 
 </div>
 
 <!-- Calibration Modal -->
 <div class="modal" id="calibrationModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content shadow border-0" style="border-radius:12px;">
-      <div class="modal-header border-bottom py-2">
-        <h5 class="modal-title font-weight-bold text-dark">System Calibration</h5>
+    <div class="modal-content hmi-modal-box">
+      <div class="hmi-modal-titlebar">
+        <h5 class="hmi-dialog-title">System Calibration</h5>
         <button type="button" class="close" id="calibrationModalClose" aria-label="Close"><span>&times;</span></button>
       </div>
-      <div class="modal-body p-3">
-        <label for="calibConfidence" class="text-dark font-weight-bold small mb-1">Detection Confidence</label>
-        <input id="calibConfidence" type="text" class="form-control mb-2 text-dark font-weight-bold" placeholder="0.437">
-        <label for="calibFeederMultiplier" class="text-dark font-weight-bold small mb-1">Feeder Multiplier</label>
-        <input id="calibFeederMultiplier" type="text" class="form-control mb-2 text-dark font-weight-bold" placeholder="0.15">
-        <label for="calibShrimpWeight" class="text-dark font-weight-bold small mb-1">Single Shrimp Weight (g)</label>
-        <input id="calibShrimpWeight" type="text" class="form-control mb-2 text-dark font-weight-bold" placeholder="0.00333">
-        <label for="calibFeederPulse" class="text-dark font-weight-bold small mb-1">Feeder Pulse Duration (s)</label>
-        <input id="calibFeederPulse" type="text" class="form-control mb-2 text-dark font-weight-bold" placeholder="5">
-        <label for="calibFlushPump" class="text-dark font-weight-bold small mb-1">Flush Duration (s)</label>
-        <input id="calibFlushPump" type="text" class="form-control mb-2 text-dark font-weight-bold" placeholder="10">
+      <div class="hmi-modal-body">
+        <div>
+          <label for="calibConfidence" class="hmi-metric-label">Detection Confidence</label>
+          <input id="calibConfidence" type="text" class="form-control text-dark font-weight-bold" placeholder="0.437">
+        </div>
+        <div>
+          <label for="calibFeederMultiplier" class="hmi-metric-label">Feeder Multiplier</label>
+          <input id="calibFeederMultiplier" type="text" class="form-control text-dark font-weight-bold" placeholder="0.15">
+        </div>
+        <div>
+          <label for="calibShrimpWeight" class="hmi-metric-label">Single Shrimp Weight (g)</label>
+          <input id="calibShrimpWeight" type="text" class="form-control text-dark font-weight-bold" placeholder="0.00333">
+        </div>
+        <div>
+          <label for="calibFeederPulse" class="hmi-metric-label">Feeder Pulse Duration (s)</label>
+          <input id="calibFeederPulse" type="text" class="form-control text-dark font-weight-bold" placeholder="5">
+        </div>
+        <div>
+          <label for="calibFlushPump" class="hmi-metric-label">Flush Duration (s)</label>
+          <input id="calibFlushPump" type="text" class="form-control text-dark font-weight-bold" placeholder="10">
+        </div>
       </div>
-      <div class="modal-footer py-2">
-        <button type="button" class="btn btn-secondary font-weight-bold" id="calibrationModalCancel">Cancel</button>
-        <button type="button" class="btn btn-shrimp-primary font-weight-bold px-3" id="calibrationModalSave">Save</button>
+      <div class="hmi-modal-actions mt-3">
+        <button type="button" class="hmi-touch-btn hmi-btn-neutral flex-fill" id="calibrationModalCancel">Cancel</button>
+        <button type="button" class="hmi-touch-btn hmi-btn-primary flex-fill" id="calibrationModalSave">Save</button>
       </div>
     </div>
   </div>
@@ -757,29 +737,29 @@ def render_page(active, body, page_script, extra_body="", full_height=False):
 <!-- ROI Modal -->
 <div class="modal" id="roiModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content shadow border-0" style="border-radius:12px;">
-      <div class="modal-header border-bottom py-2">
-        <h5 class="modal-title font-weight-bold text-dark">Region of Interest (ROI)</h5>
+    <div class="modal-content hmi-modal-box">
+      <div class="hmi-modal-titlebar">
+        <h5 class="hmi-dialog-title">Region of Interest (ROI)</h5>
         <button type="button" class="close" id="roiModalClose" aria-label="Close"><span>&times;</span></button>
       </div>
-      <div class="modal-body p-3">
+      <div class="hmi-modal-body">
         <div class="roi-preview">
           <img id="roiPreviewImg" alt="Camera preview">
           <div class="roi-box" id="roiBox"></div>
         </div>
-        <div class="roi-slider-label text-dark font-weight-bold small"><span>Left</span><span id="roiLeftVal">0%</span></div>
+        <div class="roi-slider-label text-dark font-weight-bold"><span>Left</span><span id="roiLeftVal">0%</span></div>
         <input type="range" id="roiLeft" min="0" max="95" step="1" value="0" class="custom-range">
-        <div class="roi-slider-label text-dark font-weight-bold small"><span>Right</span><span id="roiRightVal">0%</span></div>
+        <div class="roi-slider-label text-dark font-weight-bold"><span>Right</span><span id="roiRightVal">0%</span></div>
         <input type="range" id="roiRight" min="0" max="95" step="1" value="0" class="custom-range">
-        <div class="roi-slider-label text-dark font-weight-bold small"><span>Top</span><span id="roiTopVal">0%</span></div>
+        <div class="roi-slider-label text-dark font-weight-bold"><span>Top</span><span id="roiTopVal">0%</span></div>
         <input type="range" id="roiTop" min="0" max="95" step="1" value="0" class="custom-range">
-        <div class="roi-slider-label text-dark font-weight-bold small"><span>Bottom</span><span id="roiBottomVal">0%</span></div>
+        <div class="roi-slider-label text-dark font-weight-bold"><span>Bottom</span><span id="roiBottomVal">0%</span></div>
         <input type="range" id="roiBottom" min="0" max="95" step="1" value="0" class="custom-range">
       </div>
-      <div class="modal-footer py-2">
-        <button type="button" class="btn btn-outline-secondary mr-auto font-weight-bold text-dark" id="roiResetBtn">Reset</button>
-        <button type="button" class="btn btn-secondary font-weight-bold" id="roiModalCancel">Cancel</button>
-        <button type="button" class="btn btn-shrimp-primary font-weight-bold px-3" id="roiSaveBtn">Save</button>
+      <div class="hmi-modal-actions mt-3">
+        <button type="button" class="btn btn-outline-secondary font-weight-bold text-dark" id="roiResetBtn">Reset</button>
+        <button type="button" class="hmi-touch-btn hmi-btn-neutral flex-fill" id="roiModalCancel">Cancel</button>
+        <button type="button" class="hmi-touch-btn hmi-btn-primary flex-fill" id="roiSaveBtn">Save</button>
       </div>
     </div>
   </div>
@@ -788,36 +768,16 @@ def render_page(active, body, page_script, extra_body="", full_height=False):
 <!-- Power Modal -->
 <div class="modal" id="powerModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content shadow border-0" style="border-radius:12px;">
-      <div class="modal-header border-bottom py-2">
-        <h5 class="modal-title font-weight-bold text-dark">System Power</h5>
+    <div class="modal-content hmi-modal-box">
+      <div class="hmi-modal-titlebar">
+        <h5 class="hmi-dialog-title">System Power</h5>
         <button type="button" class="close" id="powerModalClose" aria-label="Close"><span>&times;</span></button>
       </div>
-      <div class="modal-body p-3">
-        <p class="text-dark font-weight-bold mb-3">Choose system action:</p>
-        <button type="button" id="powerExitAppBtn" class="btn btn-secondary btn-block font-weight-bold py-2 mb-2">Exit Desktop App</button>
-        <button type="button" id="powerShutdownPiBtn" class="btn btn-danger btn-block font-weight-bold py-2 mb-2">Shutdown Raspberry Pi</button>
-        <button type="button" id="powerModalCancel" class="btn btn-outline-secondary btn-block font-weight-bold">Cancel</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- Target PL Count Modal -->
-<div class="modal" id="shrimpTargetModal" tabindex="-1">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content shadow border-0" style="border-radius:12px;">
-      <div class="modal-header border-bottom py-2">
-        <h5 class="modal-title font-weight-bold text-dark">Target PL Shrimp Count</h5>
-        <button type="button" class="close" id="shrimpModalClose" aria-label="Close"><span>&times;</span></button>
-      </div>
-      <div class="modal-body p-3">
-        <label for="shrimpTargetInput" class="font-weight-bold text-dark">Set Target Count</label>
-        <input type="number" min="1" step="1" class="form-control form-control-lg text-center font-weight-bold text-dark" id="shrimpTargetInput" placeholder="e.g. 500">
-      </div>
-      <div class="modal-footer py-2">
-        <button type="button" class="btn btn-secondary font-weight-bold" id="shrimpModalCancel">Cancel</button>
-        <button type="button" class="btn btn-shrimp-primary font-weight-bold px-4" id="shrimpModalSubmit">Confirm &amp; Start</button>
+      <div class="hmi-modal-body">
+        <p class="text-dark font-weight-bold mb-1">Choose system action:</p>
+        <button type="button" id="powerExitAppBtn" class="hmi-touch-btn hmi-btn-neutral w-100 py-3 mb-2">Exit Touchscreen Kiosk</button>
+        <button type="button" id="powerShutdownPiBtn" class="hmi-touch-btn hmi-btn-danger w-100 py-3 mb-2">Shutdown Raspberry Pi</button>
+        <button type="button" id="powerModalCancel" class="hmi-touch-btn hmi-btn-secondary w-100 py-2">Cancel</button>
       </div>
     </div>
   </div>
@@ -825,7 +785,7 @@ def render_page(active, body, page_script, extra_body="", full_height=False):
 
 {extra_body}
 
-<!-- Touch Numpad -->
+<!-- Touch Numpad (Global Fallback) -->
 <div id="osk" aria-hidden="true">
   <div class="osk-keys">
     <button type="button" data-osk="1">1</button>
@@ -1325,7 +1285,6 @@ class AutomationManager:
             self._target_count = None
 
         self._set_default_state()
-        camera_mgr.stop_recording()
         return not already_idle
 
     def _send(self, device, action):
@@ -1391,7 +1350,6 @@ class AutomationManager:
                     self._last_target_count = self._target_count
                     self._just_completed = True
                 self._target_count = None
-            camera_mgr.stop_recording()
 
 
 automation_mgr = AutomationManager()
@@ -1737,7 +1695,6 @@ class FlushManager:
             self._running = False
             self._current_index = -1
             self._seconds_left = 0
-        camera_mgr.stop_recording()
         return not already_idle
 
     def _send(self, device, action):
@@ -1781,13 +1738,12 @@ class FlushManager:
                 self._running = False
                 self._current_index = -1
                 self._seconds_left = 0
-            camera_mgr.stop_recording()
 
 
 flush_mgr = FlushManager()
 
 # ---------------------------------------------------------------------------
-# Camera Manager (with Video Recording capability)
+# Camera & Dataset Video Recording Manager
 # ---------------------------------------------------------------------------
 class CameraManager:
     def __init__(self, resolution=CAMERA_RESOLUTION):
@@ -1809,12 +1765,11 @@ class CameraManager:
         self._roi = dict(DEFAULT_ROI)
         self._frame_is_bgr = True
         self._fallback_id = 10000
-        
-        # Video Writer support
-        self._video_writer = None
-        self._video_lock = threading.Lock()
-        self._is_recording = False
-        
+
+        # Dataset Recording
+        self._dev_recording = False
+        self._dev_video_writer = None
+        self._dev_rec_lock = threading.Lock()
         self._load_camera_settings()
 
     def start(self):
@@ -1856,59 +1811,41 @@ class CameraManager:
         with self._live_lock:
             self._live_feed_enabled = bool(enabled)
             requested = self._live_feed_enabled
-        if requested:
-            self.start_recording()
-        else:
-            if not automation_mgr.is_running() and not flush_mgr.is_running():
-                self.stop_recording()
+        if requested and automation_mgr.is_running():
+            return False
         return requested
 
     def live_feed_status(self):
+        enabled = self.live_feed_enabled() and not automation_mgr.is_running()
         return {
-            "enabled": self.live_feed_enabled(),
+            "enabled": enabled,
             "automation_running": automation_mgr.is_running(),
             "available": self.available,
-            "recording": self._is_recording
         }
 
-    def start_recording(self):
-        with self._video_lock:
-            if self._is_recording:
-                return
-            try:
-                base = time.strftime('%Y%m%d_%H%M%S')
-                filepath = os.path.join(VIDEO_CAPTURE_DIR, f"record_{base}.mp4")
-                fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-                self._video_writer = cv2.VideoWriter(filepath, fourcc, 15.0, self.resolution)
-                self._is_recording = True
-                print(f"[Camera] Video recording started -> {filepath}")
-            except Exception as e:
-                print(f"[Camera] Failed to start video writer: {e}")
+    def start_dataset_recording(self):
+        with self._dev_rec_lock:
+            if self._dev_recording:
+                return True
+            os.makedirs(DATASET_VIDEO_DIR, exist_ok=True)
+            filename = os.path.join(DATASET_VIDEO_DIR, f"shrimp_dataset_{time.strftime('%Y%m%d_%H%M%S')}.mp4")
+            fourcc = cv2.VideoWriter_fourcc(*'mp4v') if CV2_AVAILABLE else 0
+            self._dev_video_writer = cv2.VideoWriter(filename, fourcc, 15.0, self.resolution)
+            self._dev_recording = True
+            return True
 
-    def stop_recording(self):
-        with self._video_lock:
-            if not self._is_recording:
-                return
-            try:
-                if self._video_writer is not None:
-                    self._video_writer.release()
-                    self._video_writer = None
-                self._is_recording = False
-                print("[Camera] Video recording stopped and finalized.")
-            except Exception as e:
-                print(f"[Camera] Error stopping video writer: {e}")
-
-    def _write_frame_to_video(self, frame_bgr):
-        with self._video_lock:
-            if self._is_recording and self._video_writer is not None:
+    def stop_dataset_recording(self):
+        with self._dev_rec_lock:
+            if not self._dev_recording:
+                return True
+            self._dev_recording = False
+            if self._dev_video_writer is not None:
                 try:
-                    if (frame_bgr.shape[1], frame_bgr.shape[0]) != self.resolution:
-                        res_frame = cv2.resize(frame_bgr, self.resolution)
-                        self._video_writer.write(res_frame)
-                    else:
-                        self._video_writer.write(frame_bgr)
+                    self._dev_video_writer.release()
                 except Exception:
                     pass
+                self._dev_video_writer = None
+            return True
 
     def _grab_bgr(self):
         with self._frame_lock:
@@ -1925,7 +1862,14 @@ class CameraManager:
         frame = self._grab_bgr()
         if frame is None:
             return False
-        self._write_frame_to_video(frame)
+
+        with self._dev_rec_lock:
+            if self._dev_recording and self._dev_video_writer is not None:
+                try:
+                    self._dev_video_writer.write(frame)
+                except Exception:
+                    pass
+
         self._draw_roi_only(frame)
         latest_frame.set(self._to_pil(frame))
         return True
@@ -1958,7 +1902,6 @@ class CameraManager:
                 if frame is None:
                     time.sleep(BURST_INTERVAL_S)
                     continue
-                self._write_frame_to_video(frame)
                 dets = self._track_frame(frame)
                 dets = self._filter_to_roi(dets, frame.shape[1], frame.shape[0])
                 dets = self._assign_missing_ids(dets)
@@ -2175,7 +2118,8 @@ class CameraManager:
         return Image.fromarray(arr.copy())
 
     def stop(self):
-        self.stop_recording()
+        if self._dev_recording:
+            self.stop_dataset_recording()
         if self.camera_cap is not None:
             try:
                 self.camera_cap.release()
@@ -2231,7 +2175,7 @@ def camera_capture_loop():
             time.sleep(0.5)
             continue
         try:
-            if camera_mgr.live_feed_enabled():
+            if camera_mgr.live_feed_enabled() and not automation_mgr.is_running():
                 if not camera_mgr.pump_preview():
                     time.sleep(0.2)
                     continue
@@ -2296,6 +2240,34 @@ def api_live_feed_set():
     wanted = bool(data.get("enabled")) if "enabled" in data else not camera_mgr.live_feed_enabled()
     enabled = camera_mgr.set_live_feed(wanted)
     return jsonify({"ok": True, "enabled": enabled, **camera_mgr.live_feed_status()})
+
+
+@flask_app.route("/api/developer/stats", methods=["GET"])
+def api_developer_stats():
+    os.makedirs(DATASET_VIDEO_DIR, exist_ok=True)
+    videos = glob.glob(os.path.join(DATASET_VIDEO_DIR, "*.mp4"))
+    video_count = len(videos)
+    try:
+        stat = os.statvfs(DATASET_VIDEO_DIR)
+        free_gb = round((stat.f_bavail * stat.f_frsize) / (1024 ** 3), 1)
+    except Exception:
+        free_gb = 14.8
+    return jsonify({
+        "video_count": video_count,
+        "storage_gb": free_gb,
+    })
+
+
+@flask_app.route("/api/developer/record/start", methods=["POST"])
+def api_developer_record_start():
+    ok = camera_mgr.start_dataset_recording()
+    return jsonify({"ok": ok})
+
+
+@flask_app.route("/api/developer/record/stop", methods=["POST"])
+def api_developer_record_stop():
+    ok = camera_mgr.stop_dataset_recording()
+    return jsonify({"ok": ok})
 
 
 @flask_app.route("/api/ports", methods=["GET"])
