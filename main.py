@@ -2095,6 +2095,10 @@ _kiosk_process = None
 
 
 def _stop_app_services():
+    try:
+        serial_mgr.send("R2OFF")
+    except Exception:
+        pass
     automation_mgr.stop()
     feed_mgr.stop()
     flush_mgr.stop()

@@ -1,8 +1,11 @@
 """
 Camera page (/) - ShrimpSense Industrial Touchscreen HMI
-- Preserves the right panel two-section layout with bottom-anchored actions
+- Preserves two-section right panel layout with bottom-anchored actions
 - Developer Mode includes Start/Stop toggle button for Relay 1 (Water Pump)
-- Compact, overflow-free telemetry layout with badge indicators
+- Manual Mode Modal with 2 tabs:
+    1. "Manual Mode": Kept exactly as originally designed with no changes.
+    2. "Refill Mode": Shortened and streamlined to match Tab 1's natural height,
+       with clean "Start" and "Stop" buttons.
 """
 
 from flask import Blueprint, Response
@@ -127,15 +130,24 @@ CAMERA_BODY = """
   </div>
 </div>
 
-<!-- Manual Mode Modal -->
+<!-- Manual Mode Modal (Tab 1 Original + Tab 2 Shortened Refill) -->
 <div class="modal" id="manualFeedModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered" style="max-width: 480px; width: 95%;">
     <div class="modal-content shadow-lg border-0" style="border-radius:12px;">
       <div class="modal-header border-bottom py-2">
-        <h5 class="modal-title font-weight-bold text-dark">Manual Mode</h5>
-        <button type="button" class="close" id="manualFeedModalClose" aria-label="Close"><span>&times;</span></button>
+        <ul class="nav nav-pills card-header-pills m-0" id="manualModalTabs">
+          <li class="nav-item">
+            <a class="nav-link active font-weight-bold py-1 px-3" id="tabManualLink" href="javascript:void(0);">Manual Mode</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link font-weight-bold py-1 px-3 text-secondary" id="tabRefillLink" href="javascript:void(0);">Refill Mode</a>
+          </li>
+        </ul>
+        <button type="button" class="close ml-auto" id="manualFeedModalClose" aria-label="Close"><span>&times;</span></button>
       </div>
-      <div class="modal-body p-3">
+
+      <!-- Tab 1: EXACT ORIGINAL TAB 1 (Untouched) -->
+      <div class="modal-body p-3" id="tabManualContent">
         <label for="manualShrimpInput" class="text-dark font-weight-bold small text-uppercase mb-1">Enter Shrimp Count</label>
         <div class="input-group mb-2">
           <input id="manualShrimpInput" type="text" inputmode="none" autocomplete="off" class="form-control text-center font-weight-bold text-dark" style="font-size:1.5rem; height:46px;" placeholder="0">
@@ -168,6 +180,28 @@ CAMERA_BODY = """
           </button>
         </div>
       </div>
+
+      <!-- Tab 2: Refill Mode (Shortened & Proportioned to match Tab 1) -->
+      <div class="modal-body p-3" id="tabRefillContent" style="display:none;">
+        <label class="text-dark font-weight-bold small text-uppercase mb-1">Feeder Refill Control</label>
+        
+        <div class="border rounded bg-light text-center mb-3 d-flex flex-column justify-content-center" style="height: 104px;">
+          <small class="text-dark d-block font-weight-bold mb-1">STATUS</small>
+          <div>
+            <span id="refillWheelStatusPill" class="badge badge-secondary px-3 py-1 font-weight-bold" style="font-size:1.05rem;">STOPPED</span>
+          </div>
+        </div>
+
+        <div class="d-flex" style="gap:8px;">
+          <button type="button" id="btnRefillStartWheel" class="btn btn-success flex-grow-1 font-weight-bold py-2">
+            Start
+          </button>
+          <button type="button" id="btnRefillStopWheel" class="btn btn-danger flex-grow-1 font-weight-bold py-2" disabled>
+            Stop
+          </button>
+        </div>
+      </div>
+
     </div>
   </div>
 </div>
@@ -226,7 +260,6 @@ CAMERA_BODY = """
 
         <!-- Action Control Buttons -->
         <div class="dev-actions-cluster">
-          <!-- Two-State Dynamic Pump Button -->
           <button type="button" id="btnDevTogglePump" class="btn btn-outline-info font-weight-bold dev-action-btn">
             &#9654; Start Pump
           </button>
@@ -468,9 +501,7 @@ CAMERA_EXTRA_BODY = """
 .hmi-key-btn:active { background: #e2e8f0; }
 .hmi-key-fn { background: #e2e8f0; font-size: 1.1rem; color: #475569; }
 
-/* =========================================================
-   Developer Console Modern Industrial Styling
-   ========================================================= */
+/* Developer Modal Styles */
 .dev-modal-window {
   background: #090e17;
   border: 1px solid #1e293b;
@@ -646,6 +677,15 @@ const manualFeedVal = document.getElementById('manualFeedVal');
 const btnManualDispense = document.getElementById('btnManualDispense');
 const btnManualStop = document.getElementById('btnManualStop');
 
+// Refill Tab Controls
+const tabManualLink = document.getElementById('tabManualLink');
+const tabRefillLink = document.getElementById('tabRefillLink');
+const tabManualContent = document.getElementById('tabManualContent');
+const tabRefillContent = document.getElementById('tabRefillContent');
+const btnRefillStartWheel = document.getElementById('btnRefillStartWheel');
+const btnRefillStopWheel = document.getElementById('btnRefillStopWheel');
+const refillWheelStatusPill = document.getElementById('refillWheelStatusPill');
+
 const shrimpTargetModal = document.getElementById('shrimpTargetModal');
 const shrimpModalClose = document.getElementById('shrimpModalClose');
 const shrimpModalCancel = document.getElementById('shrimpModalCancel');
@@ -655,6 +695,7 @@ const targetKeyClear = document.getElementById('targetKeyClear');
 
 let flushRunning = false;
 let currentCounted = 0;
+let refillWheelRunning = false;
 
 function updateDashboardClock(){
   const el = document.getElementById('dashboardFooterClock');
@@ -754,15 +795,80 @@ function updateManualCalculator() {
   manualFeedVal.textContent = formatSmartGrams(calcRawFeed(count));
 }
 
+function switchManualModalTab(activeTab) {
+  if (activeTab === 'manual') {
+    tabManualLink.classList.add('active');
+    tabManualLink.classList.remove('text-secondary');
+    tabRefillLink.classList.remove('active');
+    tabRefillLink.classList.add('text-secondary');
+    tabManualContent.style.display = 'block';
+    tabRefillContent.style.display = 'none';
+  } else {
+    tabRefillLink.classList.add('active');
+    tabRefillLink.classList.remove('text-secondary');
+    tabManualLink.classList.remove('active');
+    tabManualLink.classList.add('text-secondary');
+    tabManualContent.style.display = 'none';
+    tabRefillContent.style.display = 'block';
+    if (typeof hideOsk === 'function') hideOsk();
+  }
+}
+
+if (tabManualLink) tabManualLink.addEventListener('click', () => switchManualModalTab('manual'));
+if (tabRefillLink) tabRefillLink.addEventListener('click', () => switchManualModalTab('refill'));
+
 if (btnOpenManualModal) {
   btnOpenManualModal.addEventListener('click', () => {
+    switchManualModalTab('manual');
     manualFeedModal.classList.add('show');
     updateManualCalculator();
     setTimeout(() => manualShrimpInput.focus(), 50);
   });
 }
 
+function setRefillWheelUi(running) {
+  refillWheelRunning = running;
+  if (!refillWheelStatusPill) return;
+  if (running) {
+    refillWheelStatusPill.className = 'badge badge-success px-3 py-1 font-weight-bold';
+    refillWheelStatusPill.textContent = 'RUNNING';
+    if (btnRefillStartWheel) btnRefillStartWheel.disabled = true;
+    if (btnRefillStopWheel) btnRefillStopWheel.disabled = false;
+  } else {
+    refillWheelStatusPill.className = 'badge badge-secondary px-3 py-1 font-weight-bold';
+    refillWheelStatusPill.textContent = 'STOPPED';
+    if (btnRefillStartWheel) btnRefillStartWheel.disabled = false;
+    if (btnRefillStopWheel) btnRefillStopWheel.disabled = true;
+  }
+}
+
+async function requestWheelAction(action) {
+  const isStart = action === 'on';
+  const cmd = isStart ? 'R2ON' : 'R2OFF';
+  try {
+    const res = await fetch('/api/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ command: cmd })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      setRefillWheelUi(isStart);
+    } else {
+      alert('Feeder command failed: ' + (data.error || 'error'));
+    }
+  } catch(e) {
+    alert('Failed to send feeder command');
+  }
+}
+
+if (btnRefillStartWheel) btnRefillStartWheel.addEventListener('click', () => requestWheelAction('on'));
+if (btnRefillStopWheel) btnRefillStopWheel.addEventListener('click', () => requestWheelAction('off'));
+
 function closeManualModal() {
+  if (refillWheelRunning) {
+    requestWheelAction('off');
+  }
   manualFeedModal.classList.remove('show');
   if (typeof hideOsk === 'function') hideOsk();
 }
@@ -782,9 +888,7 @@ if (btnManualClear) {
   });
 }
 
-/* =========================================================
-   Developer Mode Event Delegation & Dynamic Pump Controller
-   ========================================================= */
+/* Developer Mode Controller */
 const devModeModal = document.getElementById('developerModeModal');
 const devVideoFeed = document.getElementById('devVideoFeed');
 const btnExitDevMode = document.getElementById('btnExitDevMode');
@@ -846,7 +950,6 @@ async function requestPumpAction(action) {
 
 if (btnDevTogglePump) {
   btnDevTogglePump.addEventListener('click', () => {
-    // If currently running, send 'off', else send 'on'
     requestPumpAction(devPumpRunning ? 'off' : 'on');
   });
 }
@@ -869,13 +972,8 @@ function openDeveloperMode() {
 function closeDeveloperMode() {
   if (!devModeModal) return;
   
-  // Stop recording if running
   if (devIsRecording) stopDevRecording();
-  
-  // Safety: shut off pump immediately when closing
-  if (devPumpRunning) {
-    requestPumpAction('off');
-  }
+  if (devPumpRunning) requestPumpAction('off');
   
   if (devVideoFeed) devVideoFeed.src = '';
   devModeModal.classList.remove('show');
@@ -899,7 +997,6 @@ async function refreshDevTelemetry() {
   } catch(e) {}
 }
 
-// Double click intercept on brand button
 let brandClickTimer = null;
 document.addEventListener('click', (e) => {
   const toggle = e.target.closest('#secretFeedToggle');
