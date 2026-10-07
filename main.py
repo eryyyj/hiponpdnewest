@@ -90,7 +90,7 @@ class PiCamCapture:
         return 0
 
 
-CAMERA_RESOLUTION = (640, 640)
+CAMERA_RESOLUTION = (640, 480)   # must match the training clips (4:3)
 SNAPSHOT_DIR = os.path.expanduser("~/esp32_snapshots")
 DATASET_VIDEO_DIR = os.path.expanduser("~/shrimp_dataset_videos")
 
@@ -99,7 +99,13 @@ YOLO_WEIGHTS_PATH = os.path.join(_PROJECT_ROOT, "models", "best.pt")
 YOLO_TRACKER_PATH = os.path.join(_PROJECT_ROOT, "models", "shrimp_bytetrack.yaml")
 YOLO_LABELS_PATH = os.path.join(_PROJECT_ROOT, "models", "labels.txt")
 
-MODEL_EXPECTS_SWAPPED_RB = True
+MODEL_EXPECTS_SWAPPED_RB = False   # new model was trained on real-color images
+
+# The new model was trained on crops of the machine area. These numbers must
+# match the training crop (crop_roi.py: camera_defaults.json ROI + margin 0.05).
+# This is separate from the ROI you edit in the UI, which only decides what is counted.
+MODEL_CROP = {"left": 0.32, "top": 0.0, "right": 0.61, "bottom": 0.79}
+MODEL_CROP_MARGIN = 0.05
 
 DETECTION_THRESHOLD = 0.437
 DETECTION_IOU = 0.80
@@ -1888,9 +1894,23 @@ class CameraManager:
             with self._burst_lock:
                 self._burst_running = False
 
+    @staticmethod
+    def _model_crop_pixels(width, height):
+        # Same formula as crop_roi.py, so live crops match the training crops.
+        x1 = int(round(MODEL_CROP["left"] * (width - 1)))
+        y1 = int(round(MODEL_CROP["top"] * (height - 1)))
+        x2 = int(round(MODEL_CROP["right"] * (width - 1)))
+        y2 = int(round(MODEL_CROP["bottom"] * (height - 1)))
+        mx = int(round((x2 - x1) * MODEL_CROP_MARGIN))
+        my = int(round((y2 - y1) * MODEL_CROP_MARGIN))
+        return max(0, x1 - mx), max(0, y1 - my), min(width - 1, x2 + mx), min(height - 1, y2 + my)
+
     def _track_frame(self, frame_bgr):
         tracker = YOLO_TRACKER_PATH if os.path.isfile(YOLO_TRACKER_PATH) else "bytetrack.yaml"
-        model_input = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB) if MODEL_EXPECTS_SWAPPED_RB else frame_bgr
+        fh, fw = frame_bgr.shape[:2]
+        cx1, cy1, cx2, cy2 = self._model_crop_pixels(fw, fh)
+        crop = np.ascontiguousarray(frame_bgr[cy1:cy2, cx1:cx2])
+        model_input = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB) if MODEL_EXPECTS_SWAPPED_RB else crop
         results = self.yolo_model.track(
             model_input,
             persist=True,
@@ -1911,6 +1931,8 @@ class CameraManager:
         ids = boxes.id.cpu().numpy() if has_ids else [None] * len(xyxy)
         for i, box in enumerate(xyxy):
             x1, y1, x2, y2 = [float(v) for v in box]
+            x1, x2 = x1 + cx1, x2 + cx1   # back to full-frame coordinates
+            y1, y2 = y1 + cy1, y2 + cy1
             tid = int(ids[i]) if has_ids and ids[i] is not None else None
             dets.append({
                 "box": (x1, y1, max(0.0, x2 - x1), max(0.0, y2 - y1)),
