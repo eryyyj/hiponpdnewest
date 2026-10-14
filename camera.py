@@ -3,6 +3,8 @@ Camera page (/) - ShrimpSense Industrial Touchscreen HMI
 - Preserves the right panel two-section layout with bottom-anchored actions
 - Developer Mode includes Start/Stop toggle button for Relay 1 (Water Pump)
 - Compact, overflow-free telemetry layout with badge indicators
+- Feeder status: Dispensing -> Dispensed (10 s final reading) -> Final weight
+- Dataset recorder live view is no longer flipped here; main.py flips the camera frame (CAMERA_FLIP)
 """
 
 from flask import Blueprint, Response
@@ -186,7 +188,7 @@ CAMERA_BODY = """
         <div class="dev-header-badge">Live Hardware Controls</div>
       </div>
 
-      <!-- Live Stream Viewport -->
+      <!-- Live Stream Viewport (the flip is now done in main.py, CAMERA_FLIP) -->
       <div class="dev-stream-viewport">
         <img id="devVideoFeed" src="" alt="Developer Feed" class="dev-stream-img">
         <div id="devFeedFallback" class="text-muted text-center" style="display:none;">
@@ -521,6 +523,17 @@ CAMERA_EXTRA_BODY = """
   object-fit: contain;
 }
 
+/* NOT USED any more: main.py now flips the frame itself (CAMERA_FLIP).
+   Do not add these classes back to #devVideoFeed or the picture is flipped twice.
+   Old note: pick the class that matches the flip in the main app:
+     0  -> dev-flip-v    (upside down)
+     1  -> dev-flip-h    (mirror)
+    -1  -> dev-flip-180  (rotate 180)
+   None -> remove the class from #devVideoFeed */
+.dev-flip-v   { transform: scaleY(-1); }
+.dev-flip-h   { transform: scaleX(-1); }
+.dev-flip-180 { transform: rotate(180deg); }
+
 .dev-footer-panel {
   flex-shrink: 0;
   background: #090e17;
@@ -655,6 +668,7 @@ const targetKeyClear = document.getElementById('targetKeyClear');
 
 let flushRunning = false;
 let currentCounted = 0;
+let feederPhase = 'idle';
 
 function updateDashboardClock(){
   const el = document.getElementById('dashboardFooterClock');
@@ -1005,6 +1019,8 @@ if (btnDispenseAuto) {
       if (!data.ok) {
         dispenseStatusText.textContent = data.error || 'Could not start feeder';
         btnDispenseAuto.disabled = false;
+      } else {
+        feederPhase = 'waiting_zero';
       }
     } catch (e) {
       dispenseStatusText.textContent = 'Feeder communication failed';
@@ -1033,6 +1049,7 @@ if (btnManualDispense) {
         dispenseStatusText.textContent = data.error || 'Feeder start failed';
         btnManualDispense.disabled = false;
       } else {
+        feederPhase = 'waiting_zero';
         closeManualModal();
       }
     } catch (e) {
@@ -1048,6 +1065,7 @@ if (btnManualStop) {
       await fetch('/api/feed/stop', { method: 'POST' });
       dispenseStatusText.textContent = '';
     } catch(e) {}
+    feederPhase = 'idle';
     btnDispenseAuto.disabled = false;
     btnManualDispense.disabled = false;
   });
@@ -1072,7 +1090,7 @@ function renderCameraAutomationStatus(data, currentCount) {
       ? DEVICE_LABELS[step.device]
       : step.device;
     const action = step.action ? step.action.toUpperCase() : '';
-    const tail = data.seconds_left ? ' — ' + data.seconds_left + 's' : '';
+    const tail = data.seconds_left ? ' - ' + data.seconds_left + 's' : '';
     
     let progress = '';
     if (data.target_count != null && currentCount != null) {
@@ -1107,7 +1125,9 @@ async function pollCameraAutomationStatus() {
 
     renderCameraAutomationStatus(autoData, countData.count);
 
-    if (autoData.just_completed && autoData.completed_count != null) {
+    // Only show "cycle complete" when the feeder has nothing to report,
+    // so it does not overwrite the dispensing / final weight message.
+    if (autoData.just_completed && autoData.completed_count != null && feederPhase === 'idle') {
       dispenseStatusText.textContent = 'Cycle complete (' + autoData.completed_count + ' shrimp). Ready to dispense.';
     }
   } catch (error) {
@@ -1118,18 +1138,33 @@ async function pollCameraAutomationStatus() {
 async function pollFeederStatus() {
   try {
     const res = await fetch('/api/feed/status');
+    if (!res.ok) return;
     const status = await res.json();
-    if (status.running) {
-      const weight = formatSmartGrams(status.current_weight || 0);
-      const target = formatSmartGrams(status.target_grams || 0);
-      dispenseStatusText.innerHTML = '<span class="font-weight-bold text-primary">Dispensing... ' + weight + ' / ' + target + '</span>';
-      btnDispenseAuto.disabled = true;
-      btnManualDispense.disabled = true;
+    feederPhase = status.phase || 'idle';
+    const busy = !!status.running;
+    const weight = formatSmartGrams(status.current_weight || 0);
+    const target = formatSmartGrams(status.target_grams || 0);
+
+    if (status.phase === 'settling') {
+      // Target reached: feeder is off, reading the scale for the final weight
+      dispenseStatusText.innerHTML =
+        '<span class="font-weight-bold text-success">Feed dispense reached target value &#10003;</span>';
+    } else if (status.phase === 'waiting_zero' && busy) {
+      dispenseStatusText.innerHTML =
+        '<span class="font-weight-bold text-primary">' + (status.message || 'Zeroing scale...') + '</span>';
+    } else if (busy) {
+      dispenseStatusText.innerHTML =
+        '<span class="font-weight-bold text-primary">Dispensing... ' + weight + ' / ' + target + '</span>';
     } else if (status.phase === 'done') {
-      dispenseStatusText.innerHTML = '<span class="font-weight-bold text-success">Dispense Complete (' + formatSmartGrams(status.current_weight || 0) + ')</span>';
-      btnDispenseAuto.disabled = false;
-      btnManualDispense.disabled = false;
+      dispenseStatusText.innerHTML =
+        '<span class="font-weight-bold text-success">Feed dispense reached target value &#10003;</span>';
+    } else if (status.phase === 'error') {
+      dispenseStatusText.innerHTML =
+        '<span class="font-weight-bold text-danger">Feeder error: ' + (status.message || 'unknown') + '</span>';
     }
+
+    if (btnDispenseAuto) btnDispenseAuto.disabled = busy;
+    if (btnManualDispense) btnManualDispense.disabled = busy;
   } catch(e) {}
 }
 
@@ -1161,7 +1196,7 @@ function renderFlushStatus(status) {
       ? DEVICE_LABELS[step.device]
       : step.device;
     const action = step.action ? step.action.toUpperCase() : '';
-    const tail = status.seconds_left ? ' — ' + status.seconds_left + 's' : '';
+    const tail = status.seconds_left ? ' - ' + status.seconds_left + 's' : '';
     cameraAutomationStatusEl.innerHTML = '<span class="telemetry-tag">FLUSHING:</span> <span class="telemetry-val text-info">' + deviceLabel + ' &rarr; ' + action + tail + '</span>';
     processStatusMain.textContent = 'Flushing System';
     processStatusSub.textContent = deviceLabel + ' ' + action + tail;
@@ -1188,6 +1223,7 @@ function updateCameraButtonStates() {
 updateCameraButtonStates();
 pollCameraAutomationStatus();
 pollFlushStatus();
+pollFeederStatus();
 
 setInterval(pollCameraAutomationStatus, 1000);
 setInterval(pollFlushStatus, 1000);

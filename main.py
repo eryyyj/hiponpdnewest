@@ -26,9 +26,19 @@ from splash import create_splash_blueprint
 import numpy as np
 from PIL import Image, ImageDraw
 
+os.environ.setdefault("OPENCV_LOG_LEVEL", "ERROR")
+os.environ.setdefault("OPENCV_VIDEOIO_PRIORITY_OBSENSOR", "0")  # skip Orbbec probe spam
 try:
     import cv2
     CV2_AVAILABLE = True
+    try:
+        # Silence "can't open camera by index" warnings while probing webcams
+        cv2.utils.logging.setLogLevel(cv2.utils.logging.LOG_LEVEL_SILENT)
+    except Exception:
+        try:
+            cv2.setLogLevel(0)
+        except Exception:
+            pass
 except Exception:
     print("[Camera] cv2 unavailable:")
     traceback.print_exc()
@@ -43,42 +53,265 @@ except Exception:
     YOLO = None
     YOLO_AVAILABLE = False
 
-try:
-    from picamera2 import Picamera2
-    PICAMERA2_AVAILABLE = True
-except Exception:
-    print("[Camera] picamera2 unavailable:")
-    traceback.print_exc()
-    PICAMERA2_AVAILABLE = False
+# ---------------------------------------------------------------------------
+# USB Webcam detection + capture
+# ---------------------------------------------------------------------------
+# None = auto-detect the first working USB webcam.
+# Or force one: an index (0, 1, ...) or a path ("/dev/video0").
+# Can also be set with the environment variable SHRIMP_CAMERA_DEVICE.
+WEBCAM_DEVICE = None
+WEBCAM_MAX_INDEX = 10           # indexes probed when /dev/video* is not available
+WEBCAM_USE_MJPG = True          # MJPG lets USB 2.0 webcams deliver 640x480 at full fps
+WEBCAM_FPS = 30
+WEBCAM_WARMUP_FRAMES = 5        # first frames are often dark / unexposed
+WEBCAM_RECONNECT_SECONDS = 3.0
+
+# Raspberry Pi internal video nodes (ISP, codec, CSI) that are not webcams
+_NON_WEBCAM_NAME_HINTS = (
+    "bcm2835", "unicam", "rp1-cfe", "pispbe", "rpi-hevc", "codec", "isp", "imx500",
+)
 
 
-class PiCamCapture:
-    def __init__(self, size=(640, 480), buffer_count=3):
-        if not PICAMERA2_AVAILABLE:
-            raise RuntimeError("picamera2 is not available")
-        self.picam2 = Picamera2()
-        self.picam2.configure(self.picam2.create_video_configuration(
-            main={"size": size, "format": "RGB888"},
-            buffer_count=buffer_count))
-        self.picam2.start()
+def _v4l2_device_name(dev_path):
+    node = os.path.basename(dev_path)
+    try:
+        with open(f"/sys/class/video4linux/{node}/name", "r") as fh:
+            return fh.read().strip()
+    except OSError:
+        return ""
+
+
+def _open_video_capture(source):
+    if isinstance(source, str) or os.name != "nt":
+        backend = cv2.CAP_V4L2 if hasattr(cv2, "CAP_V4L2") and os.name != "nt" else cv2.CAP_ANY
+    else:
+        backend = cv2.CAP_DSHOW if hasattr(cv2, "CAP_DSHOW") else cv2.CAP_ANY
+    cap = cv2.VideoCapture(source, backend)
+    if not cap.isOpened():
+        cap.release()
+        cap = cv2.VideoCapture(source)
+    return cap
+
+
+def _probe_source(source):
+    """Return True if the source opens and actually delivers a frame."""
+    cap = None
+    try:
+        cap = _open_video_capture(source)
+        if not cap.isOpened():
+            return False
+        for _ in range(3):
+            ok, frame = cap.read()
+            if ok and frame is not None and frame.size > 0:
+                return True
+            time.sleep(0.05)
+        return False
+    except Exception:
+        return False
+    finally:
+        if cap is not None:
+            try:
+                cap.release()
+            except Exception:
+                pass
+
+
+def list_webcams(probe=True):
+    """List connected webcams. On Linux uses /dev/video* and skips Pi internal nodes."""
+    cams = []
+    if not CV2_AVAILABLE:
+        return cams
+    dev_nodes = sorted(
+        glob.glob("/dev/video*"),
+        key=lambda p: int(re.sub(r"\D", "", p) or 0),
+    )
+    if dev_nodes:
+        for dev in dev_nodes:
+            name = _v4l2_device_name(dev)
+            if any(h in name.lower() for h in _NON_WEBCAM_NAME_HINTS):
+                continue
+            if probe and not _probe_source(dev):
+                continue
+            cams.append({"source": dev, "name": name or dev})
+    else:
+        for idx in range(WEBCAM_MAX_INDEX):
+            if probe and not _probe_source(idx):
+                continue
+            cams.append({"source": idx, "name": f"Camera {idx}"})
+    return cams
+
+
+def _configured_webcam_source():
+    raw = os.environ.get("SHRIMP_CAMERA_DEVICE", WEBCAM_DEVICE)
+    if raw is None or str(raw).strip() == "":
+        return None
+    raw = str(raw).strip()
+    return int(raw) if raw.isdigit() else raw
+
+
+def find_webcam_source():
+    forced = _configured_webcam_source()
+    if forced is not None:
+        return forced if _probe_source(forced) else None
+    cams = list_webcams(probe=True)
+    return cams[0]["source"] if cams else None
+
+
+class WebcamCapture:
+    """USB webcam reader on a background thread.
+
+    read() always returns the newest frame (BGR, resized to `size`), so the
+    count burst never works on stale buffered frames. If the webcam is
+    unplugged it keeps trying to reconnect.
+    """
+
+    def __init__(self, source=None, size=(640, 480), fps=WEBCAM_FPS):
+        if not CV2_AVAILABLE:
+            raise RuntimeError("OpenCV is not available")
+        self.size = tuple(size)
+        self.fps = fps
+        self.source = source if source is not None else find_webcam_source()
+        if self.source is None:
+            raise RuntimeError("No USB webcam found")
+        self.name = (
+            _v4l2_device_name(self.source) if isinstance(self.source, str) else f"Camera {self.source}"
+        ) or str(self.source)
+        self.native_size = None
+        self._cap = None
+        self._lock = threading.Lock()
+        self._frame = None
+        self._frame_id = 0
+        self._last_frame_time = 0.0
+        self._stop = threading.Event()
+        self._open = False
+        self._connected = False
+        if not self._connect():
+            raise RuntimeError(f"Could not open webcam {self.source}")
         self._open = True
+        self._thread = threading.Thread(target=self._reader, daemon=True)
+        self._thread.start()
+        # wait briefly for the first frame
+        deadline = time.time() + 3.0
+        while time.time() < deadline and self._frame is None:
+            time.sleep(0.05)
+
+    def _connect(self):
+        cap = _open_video_capture(self.source)
+        if not cap.isOpened():
+            cap.release()
+            return False
+        if WEBCAM_USE_MJPG:
+            cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.size[0])
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.size[1])
+        cap.set(cv2.CAP_PROP_FPS, self.fps)
+        try:
+            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        except Exception:
+            pass
+        for _ in range(WEBCAM_WARMUP_FRAMES):
+            cap.read()
+        ok, frame = cap.read()
+        if not ok or frame is None:
+            cap.release()
+            return False
+        self.native_size = (frame.shape[1], frame.shape[0])
+        self._cap = cap
+        self._connected = True
+        print(f"[Camera] Webcam {self.source} ({self.name}) native {self.native_size[0]}x{self.native_size[1]}"
+              f" -> using {self.size[0]}x{self.size[1]}")
+        native_ratio = self.native_size[0] / float(self.native_size[1])
+        target_ratio = self.size[0] / float(self.size[1])
+        if abs(native_ratio - target_ratio) > 0.02:
+            print("[Camera] WARNING: webcam aspect ratio differs from the model's 4:3 training clips; "
+                  "frames are center-cropped to 4:3 before resizing.")
+        return True
+
+    def _fit(self, frame):
+        h, w = frame.shape[:2]
+        tw, th = self.size
+        if (w, h) == (tw, th):
+            return frame
+        target_ratio = tw / float(th)
+        ratio = w / float(h)
+        if abs(ratio - target_ratio) > 0.02:
+            # center-crop to the target aspect ratio (e.g. 16:9 webcam -> 4:3)
+            if ratio > target_ratio:
+                new_w = int(round(h * target_ratio))
+                x0 = (w - new_w) // 2
+                frame = frame[:, x0:x0 + new_w]
+            else:
+                new_h = int(round(w / target_ratio))
+                y0 = (h - new_h) // 2
+                frame = frame[y0:y0 + new_h, :]
+        return cv2.resize(frame, (tw, th), interpolation=cv2.INTER_AREA)
+
+    def _reader(self):
+        while not self._stop.is_set():
+            cap = self._cap
+            if cap is None:
+                if self._stop.wait(WEBCAM_RECONNECT_SECONDS):
+                    break
+                try:
+                    if not self._connect():
+                        print(f"[Camera] Webcam {self.source} reconnect failed, retrying...")
+                except Exception:
+                    pass
+                continue
+            ok, frame = cap.read()
+            if not ok or frame is None:
+                print(f"[Camera] Webcam {self.source} stopped delivering frames (unplugged?)")
+                self._connected = False
+                try:
+                    cap.release()
+                except Exception:
+                    pass
+                self._cap = None
+                continue
+            if CAMERA_FLIP is not None:
+                frame = cv2.flip(frame, CAMERA_FLIP)
+            frame = self._fit(frame)
+            with self._lock:
+                self._frame = frame
+                self._frame_id += 1
+                self._last_frame_time = time.time()
+        if self._cap is not None:
+            try:
+                self._cap.release()
+            except Exception:
+                pass
+            self._cap = None
 
     def isOpened(self):
         return self._open
 
+    def is_connected(self):
+        with self._lock:
+            fresh = (time.time() - self._last_frame_time) < 2.0
+        return self._connected and fresh
+
     def read(self):
         if not self._open:
             return False, None
-        try:
-            return True, self.picam2.capture_array()
-        except Exception:
-            return False, None
+        with self._lock:
+            if self._frame is None or (time.time() - self._last_frame_time) > 2.0:
+                return False, None
+            return True, self._frame.copy()
+
+    def info(self):
+        return {
+            "source": self.source,
+            "name": self.name,
+            "native_size": list(self.native_size) if self.native_size else None,
+            "output_size": list(self.size),
+            "connected": self.is_connected(),
+        }
 
     def release(self):
         if self._open:
+            self._stop.set()
             try:
-                self.picam2.stop()
-                self.picam2.close()
+                self._thread.join(timeout=2)
             except Exception:
                 pass
             self._open = False
@@ -91,6 +324,15 @@ class PiCamCapture:
 
 
 CAMERA_RESOLUTION = (640, 480)   # must match the training clips (4:3)
+
+# Fix the webcam picture HERE, at the source, so the live view, the recordings, the
+# gallery pictures and the model all see the same picture the touchscreen shows.
+# The old live view used CSS "dev-flip-v" (scaleY(-1)), which is a VERTICAL FLIP
+# (top <-> bottom, left stays left). That is what is applied here.
+#   None = leave as is,  0 = vertical flip (top<->bottom),  1 = horizontal mirror,
+#   -1 = both (same as turning it 180 degrees)
+# camera.py must NOT flip it again (its dev-flip-v class has been removed).
+CAMERA_FLIP = 0
 SNAPSHOT_DIR = os.path.expanduser("~/esp32_snapshots")
 DATASET_VIDEO_DIR = os.path.expanduser("~/shrimp_dataset_videos")
 
@@ -99,16 +341,30 @@ YOLO_WEIGHTS_PATH = os.path.join(_PROJECT_ROOT, "models", "best.pt")
 YOLO_TRACKER_PATH = os.path.join(_PROJECT_ROOT, "models", "shrimp_bytetrack.yaml")
 YOLO_LABELS_PATH = os.path.join(_PROJECT_ROOT, "models", "labels.txt")
 
-MODEL_EXPECTS_SWAPPED_RB = False   # new model was trained on real-color images
+MODEL_EXPECTS_SWAPPED_RB = True    # the dataset frames were red/blue swapped, so the model needs the same look
 
 # The new model was trained on crops of the machine area. These numbers must
 # match the training crop (crop_roi.py: camera_defaults.json ROI + margin 0.05).
 # This is separate from the ROI you edit in the UI, which only decides what is counted.
-MODEL_CROP = {"left": 0.32, "top": 0.0, "right": 0.61, "bottom": 0.79}
+# NEW CAMERA VIEW (zoomed in): the crop covers the chute as seen by the new camera.
+# Old camera view was {"left": 0.32, "top": 0.0, "right": 0.61, "bottom": 0.79}.
+MODEL_CROP = {"left": 0.26, "top": 0.0, "right": 0.81, "bottom": 1.0}
+# The chute is now about 2x bigger in the frame, so shrimp look bigger than in the
+# training images. A smaller imgsz shrinks the crop to roughly the training scale.
+# Set back to 640 once the model is retrained on new-camera frames.
+MODEL_IMGSZ = 640   # same size the model was trained at
 MODEL_CROP_MARGIN = 0.05
 
 DETECTION_THRESHOLD = 0.437
-DETECTION_IOU = 0.80
+DETECTION_IOU = 0.60   # NMS overlap limit inside the model (was 0.80, which let duplicate boxes on one shrimp survive)
+
+# Extra duplicate filter, applied to every frame before counting.
+# Two boxes are treated as the SAME shrimp (the lower-confidence one is dropped) if
+#   - they overlap by more than DEDUP_IOU, or
+#   - the smaller box is mostly (DEDUP_CONTAINMENT) inside the bigger one (a box nested in a box).
+# Lower numbers remove more duplicates but can merge shrimp that really touch.
+DEDUP_IOU = 0.45
+DEDUP_CONTAINMENT = 0.70
 DETECTION_MAX_DETECTIONS = 100
 BURST_FRAME_COUNT = 8
 BURST_INTERVAL_S = 0.25
@@ -1006,6 +1262,9 @@ FEED_TARE_MIN_SAMPLES = 3
 FEED_ZERO_TOLERANCE = 0.05
 FEED_ZERO_TIMEOUT_SECONDS = 60
 FEED_WEIGH_SECONDS = 3
+FEED_SETTLE_SECONDS = 3       # keep reading the scale this long after the target is reached
+FEED_SETTLE_AVG_SECONDS = 3    # average the readings from the last N seconds as the final weight
+FEED_TARGET_TOLERANCE = 0.05   # stop when the weight is within 5% below the target (0.05 = 5%, 0 = exact)
 DEFAULT_FLUSH_PUMP_SECONDS = 10.0
 CALIBRATION_SETTINGS_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "calibration_defaults.json"
@@ -1354,6 +1613,16 @@ def compute_feed_grams(shrimp_count):
     )
 
 
+# ---------------------------------------------------------------------------
+# Feed Dispense Manager
+#
+# Phases: idle -> waiting_zero -> dispensing <-> weighing -> settling -> done
+#         (any phase can end in "error", or back to "idle" when stopped)
+#
+# "settling": target reached, feeder is OFF, scale is read for
+# FEED_SETTLE_SECONDS, then the final weight is computed and phase = "done".
+# _running is always False once the thread ends, so the UI never gets stuck.
+# ---------------------------------------------------------------------------
 class FeedDispenseManager:
     def __init__(self):
         self._lock = threading.Lock()
@@ -1364,6 +1633,8 @@ class FeedDispenseManager:
         self._cycle = 0
         self._target_grams = None
         self._current_weight = 0.0
+        self._final_weight = None
+        self._seconds_left = 0
         self._shrimp_count = None
         self._tare_offset = 0.0
         self._message = ""
@@ -1381,9 +1652,20 @@ class FeedDispenseManager:
                 "cycle": self._cycle,
                 "target_grams": self._target_grams,
                 "current_weight": self._current_weight,
+                "final_weight": self._final_weight,
+                "seconds_left": self._seconds_left,
                 "shrimp_count": self._shrimp_count,
                 "message": self._message,
             }
+
+    def clear_result(self):
+        """Forget a finished/errored result so the UI goes back to idle."""
+        with self._lock:
+            if not self._running and self._phase in ("done", "error"):
+                self._phase = "idle"
+                self._message = ""
+                self._final_weight = None
+                self._seconds_left = 0
 
     def start(self, target_grams, shrimp_count=None):
         with self._lock:
@@ -1393,6 +1675,8 @@ class FeedDispenseManager:
             self._target_grams = target_grams
             self._shrimp_count = shrimp_count
             self._current_weight = 0.0
+            self._final_weight = None
+            self._seconds_left = 0
             self._cycle = 0
             self._tare_offset = 0.0
             self._message = "Zeroing scale..."
@@ -1418,6 +1702,8 @@ class FeedDispenseManager:
             self._phase = "idle"
             self._message = ""
             self._target_grams = None
+            self._final_weight = None
+            self._seconds_left = 0
         return not already_idle
 
     def _set_state(self, **kwargs):
@@ -1548,7 +1834,51 @@ class FeedDispenseManager:
         with self._lock:
             if self._target_grams is None:
                 return False
-            return self._current_weight >= self._target_grams
+            return self._current_weight >= self._target_grams * (1.0 - FEED_TARGET_TOLERANCE)
+
+    def _settle_final_weight(self, seconds):
+        """Target reached: feeder is off. Keep reading the scale for `seconds`,
+        then report the average of the last FEED_SETTLE_AVG_SECONDS as final."""
+        with self._lock:
+            self._phase = "settling"
+            self._message = "Dispensed - reading final weight"
+            self._seconds_left = int(math.ceil(seconds))
+        samples = []  # (timestamp, corrected_weight)
+        since_id = serial_mgr.get_latest_log_id()
+        deadline = time.time() + seconds
+        while True:
+            remaining = deadline - time.time()
+            if remaining <= 0:
+                break
+            if self._stop_event.is_set():
+                return False
+            for entry in serial_mgr.get_log_since(since_id):
+                since_id = max(since_id, entry["id"])
+                if entry["dir"] != "in":
+                    continue
+                weight = parse_serial_weight(entry["text"])
+                if weight is None:
+                    continue
+                corrected = self._corrected_weight(weight)
+                samples.append((entry["ts"], corrected))
+                with self._lock:
+                    self._current_weight = corrected
+            with self._lock:
+                self._seconds_left = int(math.ceil(remaining))
+            if self._stop_event.wait(0.1):
+                return False
+
+        tail = [w for ts, w in samples if ts >= deadline - FEED_SETTLE_AVG_SECONDS]
+        if not tail:
+            tail = [w for _, w in samples]
+        with self._lock:
+            final = round(sum(tail) / len(tail), 5) if tail else self._current_weight
+            self._current_weight = final
+            self._final_weight = final
+            self._seconds_left = 0
+            self._phase = "done"
+            self._message = "Feed dispense reached target value"
+        return True
 
     def _run(self):
         try:
@@ -1576,21 +1906,18 @@ class FeedDispenseManager:
                     return
 
                 if self._weight_reached():
-                    with self._lock:
-                        self._phase = "done"
-                        self._message = f"Complete: {self._current_weight:.3f} g"
+                    # Target reached: show "Dispensed", read for 10 s, then finalize
+                    self._settle_final_weight(FEED_SETTLE_SECONDS)
                     return
         finally:
+            # Always turn the feeder off and disable weight streaming
+            self._restore_defaults()
             with self._lock:
-                still_done = self._phase == "done"
-                still_error = self._phase == "error"
-                self._running = still_done or still_error
-            if not still_done:
-                self._restore_defaults()
-                if not still_error:
-                    with self._lock:
-                        self._running = False
-                        self._phase = "idle"
+                self._running = False
+                self._seconds_left = 0
+                if self._phase not in ("done", "error"):
+                    self._phase = "idle"
+                    self._message = ""
 
 
 feed_mgr = FeedDispenseManager()
@@ -1735,6 +2062,7 @@ class CameraManager:
         self._frame_is_bgr = True
         self._fallback_id = 10000
 
+        self._last_camera_error = None
         self._dev_recording = False
         self._dev_video_writer = None
         self._dev_rec_lock = threading.Lock()
@@ -1743,29 +2071,72 @@ class CameraManager:
     def start(self):
         if self.available:
             return True
-        if not CV2_AVAILABLE or not PICAMERA2_AVAILABLE:
+        if not CV2_AVAILABLE:
             return False
+        # Load the model once, even if no webcam is plugged in yet
+        if self.yolo_model is None:
+            try:
+                self._setup_yolo()
+            except Exception:
+                print("[Camera] YOLO load failed:")
+                traceback.print_exc()
         try:
             self._setup_camera()
-            self._setup_yolo()
+            self._last_camera_error = None
             self.available = True
             return True
-        except Exception:
+        except Exception as exc:
+            msg = str(exc)
+            if msg != self._last_camera_error:
+                print(f"[Camera] Webcam not started: {msg} (will keep checking)")
+                self._last_camera_error = msg
             self.available = False
             return False
 
     def _setup_camera(self):
-        self.camera_cap = PiCamCapture(size=CAMERA_RESOLUTION, buffer_count=CAMERA_BUFFER_COUNT)
-        if not self.camera_cap.isOpened():
-            raise RuntimeError("Picamera2 capture error")
+        with self._frame_lock:
+            if self.camera_cap is not None:
+                try:
+                    self.camera_cap.release()
+                except Exception:
+                    pass
+                self.camera_cap = None
+            self.camera_cap = WebcamCapture(size=CAMERA_RESOLUTION)
+            if not self.camera_cap.isOpened():
+                raise RuntimeError("Webcam capture error")
 
     def _setup_yolo(self):
         if os.path.isfile(YOLO_LABELS_PATH):
             with open(YOLO_LABELS_PATH, "r", encoding="utf-8") as fh:
                 self.labels = [line.strip() for line in fh if line.strip()] or ["shrimp"]
         if not YOLO_AVAILABLE or not os.path.isfile(YOLO_WEIGHTS_PATH):
+            print(f"[Camera] YOLO model not loaded (weights: {YOLO_WEIGHTS_PATH})")
             return
         self.yolo_model = YOLO(YOLO_WEIGHTS_PATH)
+        print(f"[Camera] YOLO model loaded: {YOLO_WEIGHTS_PATH}")
+
+    def rescan(self):
+        """Release the current webcam and pick the first working one again."""
+        if self.is_bursting():
+            return False
+        self.available = False
+        with self._frame_lock:
+            if self.camera_cap is not None:
+                try:
+                    self.camera_cap.release()
+                except Exception:
+                    pass
+                self.camera_cap = None
+        return self.start()
+
+    def camera_info(self):
+        cap = self.camera_cap
+        info = cap.info() if isinstance(cap, WebcamCapture) else None
+        return {
+            "available": self.available,
+            "model_loaded": self.yolo_model is not None,
+            "camera": info,
+        }
 
     def is_bursting(self):
         with self._burst_lock:
@@ -1871,6 +2242,7 @@ class CameraManager:
                     time.sleep(BURST_INTERVAL_S)
                     continue
                 dets = self._track_frame(frame)
+                dets = self._dedupe_boxes(dets)
                 dets = self._filter_to_roi(dets, frame.shape[1], frame.shape[0])
                 dets = self._assign_missing_ids(dets)
                 ids = {d["id"] for d in dets if d.get("id") is not None}
@@ -1915,6 +2287,7 @@ class CameraManager:
             model_input,
             persist=True,
             tracker=tracker,
+            imgsz=MODEL_IMGSZ,
             conf=calibration_mgr.get_confidence(),
             iou=DETECTION_IOU,
             max_det=DETECTION_MAX_DETECTIONS,
@@ -1952,6 +2325,33 @@ class CameraManager:
         inter = iw * ih
         union = aw * ah + bw * bh - inter
         return 0.0 if union <= 0 else inter / union
+
+    @staticmethod
+    def _dedupe_boxes(dets):
+        """Drop duplicate boxes on the same shrimp, keeping the most confident one."""
+        kept = []
+        for d in sorted(dets, key=lambda x: x.get("conf", 0.0), reverse=True):
+            ax, ay, aw, ah = d["box"]
+            area_a = aw * ah
+            duplicate = False
+            for k in kept:
+                bx, by, bw, bh = k["box"]
+                ix1, iy1 = max(ax, bx), max(ay, by)
+                ix2, iy2 = min(ax + aw, bx + bw), min(ay + ah, by + bh)
+                inter = max(0.0, ix2 - ix1) * max(0.0, iy2 - iy1)
+                if inter <= 0:
+                    continue
+                area_b = bw * bh
+                union = area_a + area_b - inter
+                iou = inter / union if union > 0 else 0.0
+                smaller = min(area_a, area_b)
+                contained = inter / smaller if smaller > 0 else 0.0
+                if iou > DEDUP_IOU or contained > DEDUP_CONTAINMENT:
+                    duplicate = True
+                    break
+            if not duplicate:
+                kept.append(d)
+        return kept
 
     def _assign_missing_ids(self, dets):
         identified = [d for d in dets if d.get("id") is not None]
@@ -2154,8 +2554,17 @@ CAMERA_CAPTURE_FPS = 15
 
 def camera_capture_loop():
     interval = 1.0 / CAMERA_CAPTURE_FPS
+    last_attempt = 0.0
     while True:
         if not camera_mgr.available:
+            # No webcam yet: look for one again every few seconds (hot-plug)
+            now = time.time()
+            if now - last_attempt >= WEBCAM_RECONNECT_SECONDS:
+                last_attempt = now
+                try:
+                    camera_mgr.start()
+                except Exception:
+                    pass
             time.sleep(0.5)
             continue
         try:
@@ -2224,6 +2633,33 @@ def api_live_feed_set():
     wanted = bool(data.get("enabled")) if "enabled" in data else not camera_mgr.live_feed_enabled()
     enabled = camera_mgr.set_live_feed(wanted)
     return jsonify({"ok": True, "enabled": enabled, **camera_mgr.live_feed_status()})
+
+
+@flask_app.route("/api/camera", methods=["GET"])
+def api_camera_info():
+    return jsonify(camera_mgr.camera_info())
+
+
+@flask_app.route("/api/camera/list", methods=["GET"])
+def api_camera_list():
+    # Probing opens each device, so skip the one already in use
+    in_use = None
+    if isinstance(camera_mgr.camera_cap, WebcamCapture):
+        in_use = camera_mgr.camera_cap.source
+    cams = []
+    for cam in list_webcams(probe=False):
+        cam = dict(cam)
+        cam["in_use"] = cam["source"] == in_use
+        cams.append(cam)
+    return jsonify({"cameras": cams})
+
+
+@flask_app.route("/api/camera/rescan", methods=["POST"])
+def api_camera_rescan():
+    if automation_mgr.is_running():
+        return jsonify({"ok": False, "error": "Automation is running"}), 400
+    ok = camera_mgr.rescan()
+    return jsonify({"ok": ok, **camera_mgr.camera_info()})
 
 
 @flask_app.route("/api/developer/stats", methods=["GET"])
@@ -2435,6 +2871,7 @@ def api_automation_start():
         except (TypeError, ValueError):
             return jsonify({"ok": False, "error": "Target count must be a number"}), 400
 
+    feed_mgr.clear_result()
     started = automation_mgr.start(target_count)
     return jsonify({"ok": True, "started": started, "status": automation_mgr.get_status()})
 
@@ -2472,6 +2909,7 @@ def api_feed_start():
     if shrimp_count < 1:
         return jsonify({"ok": False, "error": "Enter a shrimp count first"}), 400
 
+    feed_mgr.clear_result()
     target_grams = compute_feed_grams(shrimp_count)
     started = feed_mgr.start(target_grams, shrimp_count=shrimp_count)
     return jsonify({"ok": True, "started": started, "status": feed_mgr.get_status()})
@@ -2589,6 +3027,8 @@ def launch_kiosk_browser(url):
 
 
 if __name__ == "__main__":
+    _found = list_webcams(probe=False)
+    print("[Camera] Detected video devices: " + (", ".join(f"{c['source']} ({c['name']})" for c in _found) or "none"))
     camera_mgr.start()
     serial_mgr.start_watcher()
 
