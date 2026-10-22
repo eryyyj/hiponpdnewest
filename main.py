@@ -368,6 +368,7 @@ DEDUP_CONTAINMENT = 0.70
 DETECTION_MAX_DETECTIONS = 100
 BURST_FRAME_COUNT = 8
 BURST_INTERVAL_S = 0.25
+BURST_SETTLE_S = 1.5   # wait after gate 1 closes, before the first camera frame
 BURST_GALLERY_COUNT = 3
 MISSING_ID_IOU = 0.50
 
@@ -651,6 +652,7 @@ function applyCalibrationToUi(data){
   setVal('calibShrimpWeight', data.shrimp_weight_g);
   setVal('calibFeederPulse', data.feeder_pulse_seconds);
   setVal('calibFlushPump', data.flush_pump_seconds);
+  setVal('calibScaleFactor', data.scale_factor);
 }
 async function loadCalibration(){
   try{
@@ -680,7 +682,8 @@ if (document.getElementById('calibrationModalSave')){
           feeder_multiplier: num('calibFeederMultiplier'),
           shrimp_weight_g: num('calibShrimpWeight'),
           feeder_pulse_seconds: num('calibFeederPulse'),
-          flush_pump_seconds: num('calibFlushPump')
+          flush_pump_seconds: num('calibFlushPump'),
+          scale_factor: num('calibScaleFactor')
         })
       });
       const data = await res.json();
@@ -693,6 +696,25 @@ if (document.getElementById('calibrationModalSave')){
     } catch(e){
       alert('Could not save calibration');
     }
+  });
+}
+
+// Scale calibration (Zero with empty scale, then Calibrate with the known weight)
+async function scaleStep(url, body, label){
+  const status = document.getElementById('calibScaleStatus');
+  status.textContent = label;
+  try{
+    const res = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+    const data = await res.json();
+    status.textContent = data.ok ? data.message : ('Error: ' + data.error);
+    if (data.ok && data.scale_factor != null) document.getElementById('calibScaleFactor').value = String(data.scale_factor);
+  } catch(e){ status.textContent = 'Request failed'; }
+}
+if (document.getElementById('scaleZeroBtn')){
+  document.getElementById('scaleZeroBtn').addEventListener('click', () => scaleStep('/api/scale/zero', {}, 'Reading empty scale (about 8 s)...'));
+  document.getElementById('scaleCalBtn').addEventListener('click', () => {
+    const known = parseFloat(document.getElementById('calibKnownWeight').value) || 10;
+    scaleStep('/api/scale/calibrate', {known_g: known}, 'Reading known weight (about 8 s)...');
   });
 }
 
@@ -949,6 +971,16 @@ def render_page(active, body, page_script, extra_body="", full_height=False):
         <input id="calibFeederPulse" type="text" inputmode="none" autocomplete="off" class="form-control mb-2 text-dark font-weight-bold" placeholder="5">
         <label for="calibFlushPump" class="text-dark font-weight-bold">Flush pump duration (s)</label>
         <input id="calibFlushPump" type="text" inputmode="none" autocomplete="off" class="form-control mb-2 text-dark font-weight-bold" placeholder="10">
+        <hr>
+        <label for="calibScaleFactor" class="text-dark font-weight-bold">Scale factor</label>
+        <input id="calibScaleFactor" type="text" inputmode="none" autocomplete="off" class="form-control mb-2 text-dark font-weight-bold" placeholder="0.923">
+        <label for="calibKnownWeight" class="text-dark font-weight-bold">Known weight (g)</label>
+        <input id="calibKnownWeight" type="text" inputmode="none" autocomplete="off" class="form-control mb-2 text-dark font-weight-bold" value="10" placeholder="10">
+        <div class="d-flex mb-1">
+          <button type="button" id="scaleZeroBtn" class="btn btn-outline-secondary btn-sm mr-2 font-weight-bold text-dark">1. Zero (empty scale)</button>
+          <button type="button" id="scaleCalBtn" class="btn btn-outline-primary btn-sm font-weight-bold">2. Calibrate (weight on)</button>
+        </div>
+        <small id="calibScaleStatus" class="text-muted font-weight-bold d-block"></small>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary font-weight-bold" id="calibrationModalCancel">Cancel</button>
@@ -1239,11 +1271,19 @@ def _device_command(device, action):
     return None
 
 
+# Counting sequence (6 steps):
+#   1. gate 1 opens
+#   2. pump runs with gate 1 open, the shrimp flow to the imaging station
+#   3. pump stops
+#   4. gate 1 closes and the frame capture + model run ("capture": True)
+#   5. gate 2 opens to release the shrimp
+#   6. gate 2 closes
+# The pump time (step 2) is how long the shrimp need to reach the imaging station.
 PRESET_AUTOMATION_STEPS = [
     {"device": "servo1", "action": "open",  "duration": 0},
-    {"device": "relay1", "action": "on",    "duration": 7},
+    {"device": "relay1", "action": "on",    "duration": 7},   # pump runs with gate 1 open
     {"device": "relay1", "action": "off",   "duration": 0},
-    {"device": "servo1", "action": "close", "duration": 0, "capture": True},
+    {"device": "servo1", "action": "close", "duration": 0, "capture": True},   # gate closes, capture + model begin
     {"device": "servo2", "action": "open",  "duration": 3},
     {"device": "servo2", "action": "close", "duration": 0},
 ]
@@ -1257,14 +1297,34 @@ FEED_GRAMS_PER_SHRIMP = 0.00333
 FEED_MULTIPLIER = 0.15
 FEED_PULSE_SECONDS = 5.0
 FEED_TARE_SECONDS = 5.0
-FEED_TARE_STABLE_SPAN = 0.3
+FEED_SCALE_FACTOR = 0.923      # default only; the live value comes from the Calibration screen (Zero + Calibrate)
+FEED_TARE_STABLE_SPAN = 0.05   # tare is taken when the last FEED_TARE_WINDOW_S of readings vary by less than this (g)
+FEED_TARE_WINDOW_S = 2.0
+FEED_TARE_RELAX_SECONDS = 15   # after this long, take the median even if the scale is not perfectly still
 FEED_TARE_MIN_SAMPLES = 3
-FEED_ZERO_TOLERANCE = 0.05
+FEED_ZERO_TOLERANCE = 0.05     # (no longer used: the measured zero is always subtracted)
 FEED_ZERO_TIMEOUT_SECONDS = 60
-FEED_WEIGH_SECONDS = 3
-FEED_SETTLE_SECONDS = 3       # keep reading the scale this long after the target is reached
+# --- how the feeder aims at the target -------------------------------------
+# The feeder now works in short, planned pulses instead of one fixed-length pulse:
+#   1. a short probe pulse measures how fast the feeder drops feed (g per second)
+#   2. each next pulse is sized to the grams still missing (x FEED_PULSE_SAFETY, so it undershoots a bit)
+#   3. after every pulse the scale is read until it is still, and the MEDIAN of that window is used
+# "R2 ON / feeder duration each turn" on the Calibration screen is now the LONGEST pulse allowed.
+FEED_PROBE_PULSE_S = 0.5       # first pulse, used to measure the dispense rate
+FEED_MIN_PULSE_S = 0.3         # never pulse for less than this
+FEED_PULSE_SAFETY = 0.8        # aim for 80% of the missing grams each pulse (feed still falling when the relay stops)
+FEED_PULSE_GROWTH = 3.0        # a pulse is at most this many times longer than the last one
+FEED_WEIGH_SECONDS = 3         # wait this long after each pulse (feed still falling) before judging the weight
+FEED_WEIGH_MAX_SECONDS = 8     # give up waiting for a still scale after this long and use the median
+FEED_STABLE_WINDOW_S = 1.0     # the weight is the median of the last N seconds of readings
+FEED_STABLE_SPAN_G = 0.05      # ...and counts as "still" when those readings vary by less than this (g)
+FEED_MAX_CYCLES = 40           # stop with an error instead of pulsing forever
+FEED_NO_GAIN_LIMIT = 4         # this many pulses in a row with no weight gain -> error "no feed detected"
+FEED_SETTLE_SECONDS = 3        # keep reading the scale this long after the target is reached
 FEED_SETTLE_AVG_SECONDS = 3    # average the readings from the last N seconds as the final weight
-FEED_TARGET_TOLERANCE = 0.05   # stop when the weight is within 5% below the target (0.05 = 5%, 0 = exact)
+FEED_TARGET_TOLERANCE = 0.02   # stop when the weight is within 5% below the target (0.05 = 5%, 0 = exact)
+FEED_LOG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "feed_log.csv")
+FEED_RATE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "feed_rate.json")   # learned g/s, reused by the next run
 DEFAULT_FLUSH_PUMP_SECONDS = 10.0
 CALIBRATION_SETTINGS_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "calibration_defaults.json"
@@ -1279,6 +1339,7 @@ class CalibrationSettings:
         self._shrimp_weight_g = FEED_GRAMS_PER_SHRIMP
         self._feeder_pulse_seconds = FEED_PULSE_SECONDS
         self._flush_pump_seconds = DEFAULT_FLUSH_PUMP_SECONDS
+        self._scale_factor = FEED_SCALE_FACTOR   # default until calibrated
         self._load()
 
     def as_dict(self):
@@ -1289,6 +1350,7 @@ class CalibrationSettings:
                 "shrimp_weight_g": self._shrimp_weight_g,
                 "feeder_pulse_seconds": self._feeder_pulse_seconds,
                 "flush_pump_seconds": self._flush_pump_seconds,
+                "scale_factor": self._scale_factor,
             }
 
     def get_confidence(self):
@@ -1311,6 +1373,19 @@ class CalibrationSettings:
         with self._lock:
             return self._flush_pump_seconds
 
+    def get_scale_factor(self):
+        with self._lock:
+            return self._scale_factor
+
+    def set_scale_factor(self, factor):
+        factor = float(factor)
+        if not 0.1 <= factor <= 10:
+            return False, "Scale factor out of range (0.1 - 10)"
+        with self._lock:
+            self._scale_factor = round(factor, 6)
+        self._save()
+        return True, None
+
     def update(self, data):
         if not isinstance(data, dict):
             return False, "Invalid payload"
@@ -1320,6 +1395,7 @@ class CalibrationSettings:
             shrimp_weight = float(data.get("shrimp_weight_g", self.get_shrimp_weight_g()))
             pulse = float(data.get("feeder_pulse_seconds", self.get_feeder_pulse_seconds()))
             flush_pump = float(data.get("flush_pump_seconds", self.get_flush_pump_seconds()))
+            scale_factor = float(data.get("scale_factor", self.get_scale_factor()))
         except (TypeError, ValueError):
             return False, "All values must be numbers"
         if not 0.01 <= confidence <= 0.99:
@@ -1328,12 +1404,15 @@ class CalibrationSettings:
             return False, "Weights/multipliers must be > 0"
         if pulse < 0 or flush_pump < 0:
             return False, "Durations must be >= 0"
+        if not 0.1 <= scale_factor <= 10:
+            return False, "Scale factor must be 0.1 - 10"
         with self._lock:
             self._confidence = round(confidence, 4)
             self._feeder_multiplier = round(multiplier, 6)
             self._shrimp_weight_g = round(shrimp_weight, 8)
             self._feeder_pulse_seconds = round(pulse, 3)
             self._flush_pump_seconds = round(flush_pump, 3)
+            self._scale_factor = round(scale_factor, 6)
         self._save()
         return True, None
 
@@ -1386,6 +1465,9 @@ class AutomationManager:
         if not isinstance(data, dict):
             return
         durations = data.get("durations")
+        if isinstance(durations, list) and len(durations) == 7 and len(self._steps) == 6:
+            # migrate the previous 7-step order (close, pump on, open, off, close, g2 open, g2 close)
+            durations = [0, durations[1], 0, 0, durations[5], 0]
         if isinstance(durations, list) and len(durations) == len(self._steps):
             try:
                 cleaned = [max(0.0, float(d)) for d in durations]
@@ -1557,6 +1639,8 @@ class AutomationManager:
                         self._seconds_left = 0
                     self._send(step["device"], step["action"])
                     if step.get("capture"):
+                        if not self._hold(BURST_SETTLE_S):
+                            return
                         if not camera_mgr.capture_count_burst(self._stop_event):
                             return
                     if step["duration"] > 0:
@@ -1763,11 +1847,11 @@ class FeedDispenseManager:
         return self._weight_detection_on == want_on
 
     def _corrected_weight(self, raw):
-        return round(float(raw) - self._tare_offset, 5)
+        return round((float(raw) - self._tare_offset) * calibration_mgr.get_scale_factor(), 5)
 
     def _establish_tare(self):
         self._set_state(_phase="waiting_zero", _message="Stabilizing tare...")
-        samples = []
+        samples = []   # (timestamp, raw weight)
         started = time.time()
         since_id = serial_mgr.get_latest_log_id()
         deadline = started + FEED_ZERO_TIMEOUT_SECONDS
@@ -1785,24 +1869,115 @@ class FeedDispenseManager:
                 weight = parse_serial_weight(text)
                 if weight is None:
                     continue
-                samples.append(weight)
+                samples.append((entry["ts"], weight))
                 self._set_state(_current_weight=weight)
 
             now = time.time()
             elapsed = now - started
-            if elapsed >= FEED_TARE_SECONDS and len(samples) >= FEED_TARE_MIN_SAMPLES:
-                window = samples[-20:] if len(samples) > 20 else samples
-                offset = sum(window) / len(window)
-                if abs(offset) <= FEED_ZERO_TOLERANCE:
-                    offset = 0.0
-                self._tare_offset = offset
-                self._set_state(_tare_offset=offset, _current_weight=0.0, _message="Scale zeroed")
-                return True
+            if elapsed >= FEED_TARE_SECONDS:
+                window = [w for ts, w in samples if ts >= now - FEED_TARE_WINDOW_S]
+                if len(window) >= FEED_TARE_MIN_SAMPLES:
+                    span = max(window) - min(window)
+                    if span <= FEED_TARE_STABLE_SPAN or elapsed >= FEED_TARE_RELAX_SECONDS:
+                        # the real measured zero is always subtracted (it used to be thrown away
+                        # when it was under 0.05 g, which is a big error for small feed targets)
+                        offset = self._median(window)
+                        self._set_state(_tare_offset=offset, _current_weight=0.0, _message="Scale zeroed")
+                        return True
 
             if self._stop_event.wait(0.1):
                 return False
         self._set_state(_phase="error", _message="Tare timeout")
         return False
+
+    @staticmethod
+    def _median(values):
+        ordered = sorted(values)
+        n = len(ordered)
+        if n == 0:
+            return 0.0
+        mid = n // 2
+        return ordered[mid] if n % 2 else (ordered[mid - 1] + ordered[mid]) / 2.0
+
+    def _measure(self, min_seconds, max_seconds):
+        """Read the scale after a pulse. Waits at least `min_seconds` (feed still falling),
+        then returns the MEDIAN of the last FEED_STABLE_WINDOW_S once those readings are
+        still (or after `max_seconds`). Returns None if stopped."""
+        samples = []   # (timestamp, corrected weight)
+        since_id = serial_mgr.get_latest_log_id()
+        started = time.time()
+        while True:
+            if self._stop_event.is_set():
+                return None
+            for entry in serial_mgr.get_log_since(since_id):
+                since_id = max(since_id, entry["id"])
+                if entry["dir"] != "in":
+                    continue
+                weight = parse_serial_weight(entry["text"])
+                if weight is None:
+                    continue
+                corrected = self._corrected_weight(weight)
+                samples.append((entry["ts"], corrected))
+                with self._lock:
+                    self._current_weight = corrected
+            now = time.time()
+            elapsed = now - started
+            if elapsed >= min_seconds:
+                window = [w for ts, w in samples if ts >= now - FEED_STABLE_WINDOW_S]
+                if len(window) >= 3 and (max(window) - min(window) <= FEED_STABLE_SPAN_G or elapsed >= max_seconds):
+                    return self._median(window)
+                if elapsed >= max_seconds:
+                    values = [w for _, w in samples]
+                    return self._median(values) if values else self._current_weight
+            if self._stop_event.wait(0.1):
+                return None
+
+    def _plan_pulse(self, weight, rate, last_pulse):
+        """How long the next feeder pulse should run."""
+        max_pulse = max(FEED_MIN_PULSE_S, calibration_mgr.get_feeder_pulse_seconds())
+        if rate is None or rate <= 0 or last_pulse is None:
+            return min(max_pulse, FEED_PROBE_PULSE_S)
+        with self._lock:
+            target = self._target_grams
+        aim = target * (1.0 - FEED_TARGET_TOLERANCE / 2.0)   # middle of the accepted band
+        seconds = (aim - weight) / rate * FEED_PULSE_SAFETY
+        seconds = min(seconds, last_pulse * FEED_PULSE_GROWTH, max_pulse)
+        return max(FEED_MIN_PULSE_S, seconds)
+
+    @staticmethod
+    def _load_rate():
+        try:
+            with open(FEED_RATE_PATH, "r") as f:
+                rate = float(json.load(f).get("rate"))
+            return rate if rate > 0 else None
+        except Exception:
+            return None
+
+    @staticmethod
+    def _save_rate(rate):
+        try:
+            with open(FEED_RATE_PATH, "w") as f:
+                json.dump({"rate": round(float(rate), 6)}, f)
+        except Exception:
+            pass
+
+    def _log_result(self, pulses):
+        """One line per finished dispense in feed_log.csv, to see how close each run was."""
+        try:
+            with self._lock:
+                target = self._target_grams
+                final = self._final_weight
+            if target is None or final is None:
+                return
+            new_file = not os.path.isfile(FEED_LOG_PATH)
+            error_pct = (final - target) / target * 100.0 if target else 0.0
+            with open(FEED_LOG_PATH, "a") as f:
+                if new_file:
+                    f.write("time,target_g,final_g,error_pct,pulses,pulse_seconds\n")
+                secs = " ".join(f"{p:.2f}" for p in pulses)
+                f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')},{target:.5f},{final:.5f},{error_pct:.1f},{len(pulses)},{secs}\n")
+        except Exception:
+            pass
 
     def _dispense(self, seconds):
         self._send("R2ON")
@@ -1881,6 +2056,7 @@ class FeedDispenseManager:
         return True
 
     def _run(self):
+        pulses = []
         try:
             if not self._ensure_weight_detection(True):
                 self._set_state(_phase="error", _message="Scale detection failed")
@@ -1889,26 +2065,63 @@ class FeedDispenseManager:
             if not self._establish_tare():
                 return
 
+            with self._lock:
+                target = self._target_grams
+            if target is None:
+                return
+            accept = target * (1.0 - FEED_TARGET_TOLERANCE)
+
+            weight = self._measure(1.0, FEED_WEIGH_MAX_SECONDS)   # starting weight (about 0 after the tare)
+            if weight is None:
+                return
+            start_weight = weight
+            # Feed rate (g per second the relay is ON). Starts from the last run's value, if any;
+            # then it is re-measured over ALL pulses of this run, which includes the feeder's
+            # start-up delay and the feed still falling after the relay stops.
+            rate = self._load_rate()
+            last_pulse = max(FEED_MIN_PULSE_S, calibration_mgr.get_feeder_pulse_seconds()) if rate else None
+            no_gain = 0
+
             while not self._stop_event.is_set():
+                if weight >= accept:
+                    self._settle_final_weight(FEED_SETTLE_SECONDS)
+                    self._log_result(pulses)
+                    if rate:
+                        self._save_rate(rate)
+                    return
                 with self._lock:
+                    if self._cycle >= FEED_MAX_CYCLES:
+                        self._phase = "error"
+                        self._message = "Target not reached"
+                        return
                     self._cycle += 1
                     self._phase = "dispensing"
                     self._message = f"Dispense pulse {self._cycle}"
 
-                if not self._dispense(calibration_mgr.get_feeder_pulse_seconds()):
+                seconds = self._plan_pulse(weight, rate, last_pulse)
+                if not self._dispense(seconds):
                     return
+                pulses.append(seconds)
+                last_pulse = seconds
 
                 with self._lock:
                     self._phase = "weighing"
                     self._message = "Weighing"
 
-                if not self._watch_weight(FEED_WEIGH_SECONDS):
+                new_weight = self._measure(FEED_WEIGH_SECONDS, FEED_WEIGH_MAX_SECONDS)
+                if new_weight is None:
                     return
 
-                if self._weight_reached():
-                    # Target reached: show "Dispensed", read for 10 s, then finalize
-                    self._settle_final_weight(FEED_SETTLE_SECONDS)
-                    return
+                if new_weight > weight:
+                    no_gain = 0
+                else:
+                    no_gain += 1
+                    if no_gain >= FEED_NO_GAIN_LIMIT:
+                        self._set_state(_phase="error", _message="No feed detected")
+                        return
+                weight = new_weight
+                if weight > start_weight:
+                    rate = (weight - start_weight) / sum(pulses)
         finally:
             # Always turn the feeder off and disable weight streaming
             self._restore_defaults()
@@ -1921,6 +2134,89 @@ class FeedDispenseManager:
 
 
 feed_mgr = FeedDispenseManager()
+
+
+# ---------------------------------------------------------------------------
+# Scale Calibrator
+#
+# Two buttons in the Calibration modal:
+#   Zero      - empty scale: records the raw reading (median over SAMPLE_SECONDS)
+#   Calibrate - known weight on the scale: records the raw reading again and sets
+#               scale_factor = known_g / (raw_loaded - raw_empty)
+# The factor is saved in calibration_defaults.json and used by
+# FeedDispenseManager._corrected_weight, which uses the same (raw - tare) * factor math.
+# ---------------------------------------------------------------------------
+class ScaleCalibrator:
+    SKIP_SECONDS = 1.5      # ignore the first readings after streaming starts
+    SAMPLE_SECONDS = 6.0    # median over this long
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._empty_raw = None
+
+    def _sample_raw(self):
+        """Turn weight streaming on, return the median raw reading, turn streaming off."""
+        if not serial_mgr.is_connected():
+            raise RuntimeError("Not connected to serial port")
+        since_id = serial_mgr.get_latest_log_id()
+        serial_mgr.send("W")
+        toggles, is_on, t_on = 1, False, None
+        samples = []
+        deadline = time.time() + 5 + self.SKIP_SECONDS + self.SAMPLE_SECONDS
+        try:
+            while time.time() < deadline:
+                for e in serial_mgr.get_log_since(since_id):
+                    since_id = max(since_id, e["id"])
+                    if e["dir"] != "in":
+                        continue
+                    text = e["text"] or ""
+                    if "HX711 not found" in text:
+                        raise RuntimeError("HX711 not found")
+                    if "Weight detection ON" in text:
+                        is_on, t_on = True, time.time()
+                        continue
+                    if "Weight detection OFF" in text:
+                        is_on = False
+                        if toggles < 3:          # it was already on, so we switched it off: switch it on again
+                            serial_mgr.send("W")
+                            toggles += 1
+                        continue
+                    w = parse_serial_weight(text)
+                    if w is not None and is_on and t_on and e["ts"] >= t_on + self.SKIP_SECONDS:
+                        samples.append(w)
+                if t_on and time.time() >= t_on + self.SKIP_SECONDS + self.SAMPLE_SECONDS:
+                    break
+                time.sleep(0.1)
+        finally:
+            if is_on:
+                serial_mgr.send("W")
+        if len(samples) < 5:
+            raise RuntimeError("Not enough scale readings")
+        return FeedDispenseManager._median(samples), max(samples) - min(samples)
+
+    def zero(self):
+        raw, span = self._sample_raw()
+        with self._lock:
+            self._empty_raw = raw
+        return f"Empty scale recorded (noise {span:.2f}). Now place the known weight on the scale and press Calibrate."
+
+    def calibrate(self, known_g):
+        with self._lock:
+            empty = self._empty_raw
+        if empty is None:
+            raise RuntimeError("Press Zero first (empty scale)")
+        loaded, span = self._sample_raw()
+        delta = loaded - empty
+        if delta < 1.0:
+            raise RuntimeError("Weight not detected - is it on the scale?")
+        factor = known_g / delta
+        ok, err = calibration_mgr.set_scale_factor(factor)
+        if not ok:
+            raise RuntimeError(err)
+        return factor, f"Scale factor set to {factor:.4f} (raw {delta:.2f} = {known_g:g} g)"
+
+
+scale_cal = ScaleCalibrator()
 
 # ---------------------------------------------------------------------------
 # Flush Manager
@@ -2754,6 +3050,38 @@ def api_calibration_set():
     if not ok:
         return jsonify({"ok": False, "error": err}), 400
     return jsonify({"ok": True, "settings": calibration_mgr.as_dict()})
+
+
+def _scale_busy():
+    return automation_mgr.is_running() or feed_mgr.is_running() or flush_mgr.is_running()
+
+
+@flask_app.route("/api/scale/zero", methods=["POST"])
+def api_scale_zero():
+    if _scale_busy():
+        return jsonify({"ok": False, "error": "A process is running"}), 400
+    try:
+        return jsonify({"ok": True, "message": scale_cal.zero()})
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 500
+
+
+@flask_app.route("/api/scale/calibrate", methods=["POST"])
+def api_scale_calibrate():
+    if _scale_busy():
+        return jsonify({"ok": False, "error": "A process is running"}), 400
+    data = request.get_json(silent=True) or {}
+    try:
+        known_g = float(data.get("known_g", 10))
+        if known_g <= 0:
+            raise ValueError
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "Known weight must be > 0"}), 400
+    try:
+        factor, msg = scale_cal.calibrate(known_g)
+        return jsonify({"ok": True, "scale_factor": round(factor, 6), "message": msg})
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 500
 
 
 @flask_app.route("/api/connect", methods=["POST"])

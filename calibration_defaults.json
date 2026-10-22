@@ -1,0 +1,8 @@
+{
+  "confidence": 0.95,
+  "feeder_multiplier": 0.15,
+  "shrimp_weight_g": 0.00333,
+  "feeder_pulse_seconds": 5.0,
+  "flush_pump_seconds": 10.0,
+  "scale_factor": 0.925926
+}
