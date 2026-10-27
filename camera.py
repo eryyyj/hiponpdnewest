@@ -34,7 +34,7 @@ CAMERA_BODY = """
         Cancel
       </button>
       <button id="cameraFlushBtn" class="hmi-touch-btn hmi-btn-neutral">
-        Flush
+        Clean
       </button>
     </div>
 
@@ -129,45 +129,91 @@ CAMERA_BODY = """
   </div>
 </div>
 
-<!-- Manual Mode Modal (Feed Simulator) -->
+<!-- Manual Mode Modal -->
 <div class="modal" id="manualFeedModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered" style="max-width: 480px; width: 95%;">
     <div class="modal-content shadow-lg border-0" style="border-radius:12px;">
       <div class="modal-header border-bottom py-2">
-        <h5 class="modal-title font-weight-bold text-dark"> Manual Mode</h5>
+        <h5 class="modal-title font-weight-bold text-dark">Manual Mode</h5>
         <button type="button" class="close" id="manualFeedModalClose" aria-label="Close"><span>&times;</span></button>
       </div>
       <div class="modal-body p-3">
-        <label for="manualShrimpInput" class="text-dark font-weight-bold small text-uppercase mb-1">Enter Shrimp Count</label>
-        <div class="input-group mb-2">
-          <input id="manualShrimpInput" type="text" inputmode="none" autocomplete="off" class="form-control text-center font-weight-bold text-dark" style="font-size:1.5rem; height:46px;" placeholder="0">
-          <div class="input-group-append">
-            <button class="btn btn-outline-secondary font-weight-bold text-dark" type="button" id="btnManualClear">Clear</button>
-          </div>
+        <div class="btn-group btn-group-toggle d-flex mb-3" role="group" aria-label="Manual mode options">
+          <button type="button" class="btn btn-primary font-weight-bold flex-fill manual-tab active" id="manualFeedingTab" data-manual-tab="feeding">Manual Feeding</button>
+          <button type="button" class="btn btn-outline-secondary font-weight-bold flex-fill manual-tab" id="refillFeederTab" data-manual-tab="refill">Refill Feeder</button>
         </div>
-
-        <div class="row mb-3" style="margin:0 -4px;">
-          <div class="col-6 px-1">
-            <div class="p-2 border rounded bg-light text-center h-100">
-              <small class="text-dark d-block font-weight-bold">Biomass</small>
-              <strong id="manualBiomassVal" class="text-dark" style="font-size:1.15rem;">0.00 g</strong>
-            </div>
+        <section id="manualFeedingPanel">
+          <label for="manualShrimpInput" class="text-dark font-weight-bold small text-uppercase mb-1">Enter Shrimp Count</label>
+          <div class="input-group mb-2">
+            <input id="manualShrimpInput" type="text" inputmode="none" autocomplete="off" class="form-control text-center font-weight-bold text-dark" style="font-size:1.5rem; height:46px;" placeholder="0">
+            <div class="input-group-append"><button class="btn btn-outline-secondary font-weight-bold text-dark" type="button" id="btnManualClear">Clear</button></div>
           </div>
-          <div class="col-6 px-1">
-            <div class="p-2 border rounded bg-light text-center h-100">
-              <small class="text-dark d-block font-weight-bold">Recommended Feed</small>
-              <strong id="manualFeedVal" class="text-dark" style="font-size:1.15rem;">0.00 g</strong>
-            </div>
+          <div class="row mb-3" style="margin:0 -4px;">
+            <div class="col-6 px-1"><div class="p-2 border rounded bg-light text-center h-100"><small class="text-dark d-block font-weight-bold">Biomass</small><strong id="manualBiomassVal" class="text-dark" style="font-size:1.15rem;">0.00 g</strong></div></div>
+            <div class="col-6 px-1"><div class="p-2 border rounded bg-light text-center h-100"><small class="text-dark d-block font-weight-bold">Recommended Feed</small><strong id="manualFeedVal" class="text-dark" style="font-size:1.15rem;">0.00 g</strong></div></div>
           </div>
-        </div>
+          <div class="d-flex" style="gap:8px;">
+            <button type="button" id="btnManualDispense" class="btn btn-danger flex-grow-1 font-weight-bold py-2">Dispense Feed</button>
+            <button type="button" id="btnManualStop" class="btn btn-outline-danger font-weight-bold px-4">Stop</button>
+          </div>
+        </section>
+        
+<section id="refillFeederPanel" style="display:none;">
 
-        <div class="d-flex" style="gap:8px;">
-          <button type="button" id="btnManualDispense" class="btn btn-danger flex-grow-1 font-weight-bold py-2">
-            Dispense Feed
-          </button>
-          <button type="button" id="btnManualStop" class="btn btn-outline-danger font-weight-bold px-4">
-            Stop
-          </button>
+  <div class="border rounded bg-light text-center p-4 mb-3">
+    <div class="font-weight-bold text-dark mb-2">STATUS</div>
+    <span
+      id="refillStatusBadge"
+      class="badge badge-secondary px-3 py-2"
+      style="font-size:1.1rem;"
+    >
+      STOPPED
+    </span>
+  </div>
+
+  <div class="d-flex" style="gap:10px;">
+    <button
+      type="button"
+      id="btnRefillStart"
+      class="btn btn-success btn-lg flex-fill font-weight-bold"
+    >
+      Start
+    </button>
+
+    <button
+      type="button"
+      id="btnRefillStop"
+      class="btn btn-danger btn-lg flex-fill font-weight-bold"
+      disabled
+    >
+      Stop
+    </button>
+  </div>
+
+  <div
+    id="refillStatusText"
+    class="small font-weight-bold mt-2"
+    role="status"
+    aria-live="polite"
+  ></div>
+</section>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Counting inactivity confirmation -->
+<div class="modal" id="countingInactivityModal" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="countingInactivityTitle" style="display:none; position:fixed; inset:0; z-index:1090; background:rgba(0,0,0,.55); align-items:center; justify-content:center;">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:440px; width:94%; margin:auto;">
+    <div class="modal-content shadow border-0" style="border-radius:14px;">
+      <div class="modal-body p-4 text-center">
+        <h5 id="countingInactivityTitle" class="font-weight-bold text-dark">No shrimp detected recently</h5>
+        <p class="text-muted mb-2">The system is still running, but no new shrimp have been detected for a while.</p>
+        <p class="text-dark font-weight-bold mb-3">Would you like to continue counting or finish this session?</p>
+        <div class="d-flex" style="gap:10px;">
+          <button type="button" id="countingContinueBtn" class="btn btn-outline-secondary font-weight-bold flex-fill">Continue Counting</button>
+          <button type="button" id="countingFinishBtn" class="btn btn-danger font-weight-bold flex-fill">Finish Counting</button>
         </div>
       </div>
     </div>
@@ -627,6 +673,8 @@ CAMERA_EXTRA_BODY = """
   color: #ffffff;
 }
 
+.manual-tab { min-height: 44px; }
+#countingInactivityModal.show { display: flex !important; }
 @keyframes blinker { 50% { opacity: 0; } }
 </style>
 """
@@ -651,6 +699,41 @@ const dispenseStatusText = document.getElementById('dispenseStatusText');
 
 const btnOpenManualModal = document.getElementById('btnOpenManualModal');
 const manualFeedModal = document.getElementById('manualFeedModal');
+const manualFeedingTab = document.getElementById('manualFeedingTab');
+const refillFeederTab = document.getElementById('refillFeederTab');
+const manualFeedingPanel = document.getElementById('manualFeedingPanel');
+const refillFeederPanel = document.getElementById('refillFeederPanel');
+const btnRefillWheel = document.getElementById('btnRefillWheel');
+const refillStatusText = document.getElementById('refillStatusText');
+const countingInactivityModal = document.getElementById('countingInactivityModal');
+const countingContinueBtn = document.getElementById('countingContinueBtn');
+const countingFinishBtn = document.getElementById('countingFinishBtn');
+
+const INACTIVITY_PROMPT_SECONDS = 45; // Tune after observing real shrimp flow.
+let lastShrimpDetectionAt = Date.now();
+let inactivityPromptOpen = false;
+let lastObservedDetectionCount = 0;
+
+function showCountingInactivityPrompt() {
+  if (!countingInactivityModal || inactivityPromptOpen) return;
+  inactivityPromptOpen = true;
+  countingInactivityModal.classList.add('show');
+  countingInactivityModal.style.display = 'flex';
+}
+function hideCountingInactivityPrompt(resetTimer = true) {
+  if (countingInactivityModal) {
+    countingInactivityModal.classList.remove('show');
+    countingInactivityModal.style.display = 'none';
+  }
+  inactivityPromptOpen = false;
+  if (resetTimer) lastShrimpDetectionAt = Date.now();
+}
+if (countingContinueBtn) countingContinueBtn.addEventListener('click', () => hideCountingInactivityPrompt(true));
+if (countingFinishBtn) countingFinishBtn.addEventListener('click', async () => {
+  hideCountingInactivityPrompt(false);
+  try { await fetch('/api/automation/stop', { method: 'POST' }); } catch (e) {}
+  await pollCameraAutomationStatus();
+});
 const manualFeedModalClose = document.getElementById('manualFeedModalClose');
 const manualShrimpInput = document.getElementById('manualShrimpInput');
 const btnManualClear = document.getElementById('btnManualClear');
@@ -777,24 +860,152 @@ if (btnOpenManualModal) {
 }
 
 function closeManualModal() {
+  stopRefillWheel();
+  setManualTab('feeding');
   manualFeedModal.classList.remove('show');
   if (typeof hideOsk === 'function') hideOsk();
 }
 
-if (manualFeedModalClose) manualFeedModalClose.addEventListener('click', closeManualModal);
-if (manualFeedModal) {
-  manualFeedModal.addEventListener('click', (e) => {
-    if (e.target === manualFeedModal) closeManualModal();
+function setManualTab(tab) {
+  const refill = tab === 'refill';
+  if (manualFeedingPanel) manualFeedingPanel.style.display = refill ? 'none' : 'block';
+  if (refillFeederPanel) refillFeederPanel.style.display = refill ? 'block' : 'none';
+  if (manualFeedingTab) {
+    manualFeedingTab.classList.toggle('active', !refill);
+    manualFeedingTab.classList.toggle('btn-primary', !refill);
+    manualFeedingTab.classList.toggle('btn-outline-secondary', refill);
+  }
+  if (refillFeederTab) {
+    refillFeederTab.classList.toggle('active', refill);
+    refillFeederTab.classList.toggle('btn-primary', refill);
+    refillFeederTab.classList.toggle('btn-outline-secondary', !refill);
+  }
+}
+if (manualFeedingTab) manualFeedingTab.addEventListener('click', () => setManualTab('feeding'));
+if (refillFeederTab) refillFeederTab.addEventListener('click', () => setManualTab('refill'));
+
+
+const btnRefillStart = document.getElementById('btnRefillStart');
+const btnRefillStop = document.getElementById('btnRefillStop');
+const refillStatusBadge = document.getElementById('refillStatusBadge');
+
+let refillKeepaliveInterval = null;
+let refillRequestActive = false;
+
+function updateRefillUI(running) {
+  if (btnRefillStart) btnRefillStart.disabled = running;
+  if (btnRefillStop) btnRefillStop.disabled = !running;
+
+  if (refillStatusBadge) {
+    refillStatusBadge.textContent = running ? 'RUNNING' : 'STOPPED';
+    refillStatusBadge.classList.toggle('badge-success', running);
+    refillStatusBadge.classList.toggle('badge-secondary', !running);
+  }
+}
+
+async function startRefillWheel() {
+  if (refillRequestActive) return;
+
+  refillRequestActive = true;
+  updateRefillUI(true);
+
+  try {
+    const res = await fetch('/api/refill/start', {
+      method: 'POST'
+    });
+    const data = await res.json();
+
+    if (!res.ok || !data.ok) {
+      refillRequestActive = false;
+      updateRefillUI(false);
+
+      if (refillStatusText) {
+        refillStatusText.textContent =
+          data.error || 'Could not start feeder wheel';
+      }
+      return;
+    }
+
+    // The user may have pressed Stop while the start request was pending.
+    if (!refillRequestActive) {
+      fetch('/api/refill/stop', {
+        method: 'POST',
+        keepalive: true
+      }).catch(() => {});
+      return;
+    }
+
+    if (refillStatusText) {
+      refillStatusText.textContent =
+        'Feeder wheel is rotating. Press Stop when ready to refill.';
+    }
+
+    // Keep the backend safety watchdog alive while the wheel is running.
+    refillKeepaliveInterval = setInterval(() => {
+      fetch('/api/refill/keepalive', {
+        method: 'POST'
+      }).then(async (res) => {
+        if (!res.ok) {
+          await stopRefillWheel('Feeder stopped for safety.');
+        }
+      }).catch(() => {
+        stopRefillWheel('Connection lost. Stopping feeder.');
+      });
+    }, 700);
+
+  } catch (e) {
+    refillRequestActive = false;
+    updateRefillUI(false);
+
+    if (refillStatusText) {
+      refillStatusText.textContent =
+        'Could not communicate with feeder.';
+    }
+  }
+}
+
+async function stopRefillWheel(message = 'Feeder wheel stopped.') {
+  if (refillKeepaliveInterval) {
+    clearInterval(refillKeepaliveInterval);
+    refillKeepaliveInterval = null;
+  }
+
+  const wasActive = refillRequestActive;
+  refillRequestActive = false;
+  updateRefillUI(false);
+
+  if (wasActive) {
+    try {
+      await fetch('/api/refill/stop', {
+        method: 'POST',
+        keepalive: true
+      });
+    } catch (e) {
+      message = 'Stop requested. Check that the feeder has stopped.';
+    }
+  }
+
+  if (refillStatusText) {
+    refillStatusText.textContent = message;
+  }
+}
+
+if (btnRefillStart) {
+  btnRefillStart.addEventListener('click', startRefillWheel);
+}
+
+if (btnRefillStop) {
+  btnRefillStop.addEventListener('click', () => {
+    stopRefillWheel();
   });
 }
 
-if (manualShrimpInput) manualShrimpInput.addEventListener('input', updateManualCalculator);
-if (btnManualClear) {
-  btnManualClear.addEventListener('click', () => {
-    manualShrimpInput.value = '';
-    updateManualCalculator();
-  });
-}
+// Stop the feeder if the browser window loses focus.
+window.addEventListener('blur', () => {
+  if (refillRequestActive) {
+    stopRefillWheel('Window lost focus. Feeder stopped.');
+  }
+});
 
 /* =========================================================
    Developer Mode Event Delegation & Dynamic Pump Controller
@@ -928,7 +1139,21 @@ document.addEventListener('click', (e) => {
     } else {
       clearTimeout(brandClickTimer);
       brandClickTimer = null;
-      openDeveloperMode();
+      fetch('/api/developer/status').then(r => r.json()).then(async status => {
+        if (status.developer_mode) {
+          openDeveloperMode();
+          return;
+        }
+        const pin = window.prompt('Developer PIN:');
+        if (pin === null) return;
+        const response = await fetch('/api/developer/login', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pin })
+        });
+        const data = await response.json();
+        if (data.ok) window.location.reload();
+        else window.alert(data.error || 'Developer access denied');
+      }).catch(() => window.alert('Could not verify developer access'));
     }
   }
 });
@@ -975,6 +1200,9 @@ if (btnDevStopRecord) btnDevStopRecord.addEventListener('click', stopDevRecordin
 if (cameraStartContinuousBtn) {
   cameraStartContinuousBtn.addEventListener('click', async () => {
     if (automationRunning || flushRunning) return;
+    hideCountingInactivityPrompt(false);
+    lastShrimpDetectionAt = Date.now();
+    lastObservedDetectionCount = 0;
     cameraStartContinuousBtn.disabled = true;
     try {
       const res = await fetch('/api/automation/start', {
@@ -1125,6 +1353,25 @@ async function pollCameraAutomationStatus() {
 
     renderCameraAutomationStatus(autoData, countData.count);
 
+    // Use the current-cycle detection count to estimate recent detection activity.
+    const detectedNow = Number(countData.detected || 0);
+    if (detectedNow > 0) {
+      lastShrimpDetectionAt = Date.now();
+      lastObservedDetectionCount = detectedNow;
+      if (inactivityPromptOpen) hideCountingInactivityPrompt(false);
+    } else if (lastObservedDetectionCount > 0) {
+      // The cycle has moved to a no-detection state; start measuring inactivity from here.
+      lastObservedDetectionCount = 0;
+      lastShrimpDetectionAt = Date.now();
+    }
+
+    if (autoData.running && !inactivityPromptOpen &&
+        (Date.now() - lastShrimpDetectionAt) >= INACTIVITY_PROMPT_SECONDS * 1000) {
+      showCountingInactivityPrompt();
+    }
+    if (!autoData.running && inactivityPromptOpen) hideCountingInactivityPrompt(false);
+    if (!autoData.running) lastShrimpDetectionAt = Date.now();
+
     // Only show "cycle complete" when the feeder has nothing to report,
     // so it does not overwrite the dispensing / final weight message.
     if (autoData.just_completed && autoData.completed_count != null && feederPhase === 'idle') {
@@ -1176,12 +1423,12 @@ if (cameraFlushBtn) {
       const res = await fetch('/api/flush/start', { method: 'POST' });
       const data = await res.json();
       if (!data.ok) {
-        alert(data.error || 'Could not start flush');
+        alert(data.error || 'Could not start cleaning');
         updateCameraButtonStates();
         return;
       }
     } catch (e) {
-      alert('Flush request failed');
+      alert('Cleaning request failed');
     }
     await pollFlushStatus();
   });
@@ -1197,8 +1444,8 @@ function renderFlushStatus(status) {
       : step.device;
     const action = step.action ? step.action.toUpperCase() : '';
     const tail = status.seconds_left ? ' - ' + status.seconds_left + 's' : '';
-    cameraAutomationStatusEl.innerHTML = '<span class="telemetry-tag">FLUSHING:</span> <span class="telemetry-val text-info">' + deviceLabel + ' &rarr; ' + action + tail + '</span>';
-    processStatusMain.textContent = 'Flushing System';
+    cameraAutomationStatusEl.innerHTML = '<span class="telemetry-tag">CLEANING:</span> <span class="telemetry-val text-info">' + deviceLabel + ' &rarr; ' + action + tail + '</span>';
+    processStatusMain.textContent = 'Cleaning System';
     processStatusSub.textContent = deviceLabel + ' ' + action + tail;
   } else if (!automationRunning) {
     cameraAutomationStatusEl.innerHTML = '<span class="telemetry-tag">STATUS:</span> <span class="telemetry-val">Idle</span>';

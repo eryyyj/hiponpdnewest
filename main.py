@@ -15,7 +15,7 @@ import json
 import math
 import re
 import queue
-from flask import Flask, request, jsonify, Response, send_from_directory
+from flask import Flask, request, jsonify, Response, send_from_directory, session, redirect
 import serial
 import serial.tools.list_ports
 
@@ -525,20 +525,21 @@ NAV_TABS = [
 ]
 
 def render_nav_links(active):
+    developer_mode = bool(session.get("developer_mode"))
     dashboard_active = "active font-weight-bold text-dark" if active == "camera" else "text-dark"
     brand_tab = f"""
     <li class="nav-item mr-3">
-      <a class="nav-link d-flex align-items-center {dashboard_active}" href="/" id="secretFeedToggle" title="Double click for developer inspection">
+      <a class="nav-link d-flex align-items-center {dashboard_active}" href="/" id="secretFeedToggle" title="Double-click for developer access">
         <img src="/assets/ShrimpSenseLogo.png" alt="ShrimpSense" onerror="this.src='/assets/images/landing.png'" style="height: 32px; width: auto;" class="mr-2">
         <strong style="font-size:1.15rem;">ShrimpSense</strong>
       </a>
     </li>
     """
-    
     links = [brand_tab]
-    for key, href, label in NAV_TABS:
-        cls = "nav-link active font-weight-bold text-dark" if key == active else "nav-link font-weight-bold text-muted"
-        links.append(f'<li class="nav-item"><a class="{cls}" href="{href}">{label}</a></li>')
+    if developer_mode:
+        for key, href, label in NAV_TABS:
+            cls = "nav-link active font-weight-bold text-dark" if key == active else "nav-link font-weight-bold text-muted"
+            links.append(f'<li class="nav-item"><a class="{cls}" href="{href}">{label}</a></li>')
     return "\n        ".join(links)
 
 
@@ -547,6 +548,7 @@ async function refreshPorts(){
   const res = await fetch('/api/ports');
   const data = await res.json();
   const select = document.getElementById('portSelect');
+  if (!select) return;
   const current = select.value;
   select.innerHTML = '';
   data.ports.forEach(p => {
@@ -568,20 +570,24 @@ async function refreshStatus(){
   const btn = document.getElementById('connectBtn');
   const dot = document.getElementById('statusDot');
   const text = document.getElementById('statusText');
-  if (data.connected){
-    btn.textContent = 'Disconnect';
-    btn.classList.remove('btn-success'); btn.classList.add('btn-danger');
-    dot.classList.add('on'); if (text) text.textContent = 'Connected: ' + data.port;
-  } else {
-    btn.textContent = 'Connect';
-    btn.classList.remove('btn-danger'); btn.classList.add('btn-success');
-    dot.classList.remove('on'); if (text) text.textContent = 'Disconnected';
+  if (btn) {
+    if (data.connected){
+      btn.textContent = 'Disconnect';
+      btn.classList.remove('btn-success'); btn.classList.add('btn-danger');
+    } else {
+      btn.textContent = 'Connect';
+      btn.classList.remove('btn-danger'); btn.classList.add('btn-success');
+    }
   }
+  if (dot) dot.classList.toggle('on', !!data.connected);
+  if (text) text.textContent = data.connected ? ('Connected: ' + data.port) : 'Disconnected';
 }
 
-document.getElementById('refreshBtn').addEventListener('click', refreshPorts);
+const refreshBtn = document.getElementById('refreshBtn');
+if (refreshBtn) refreshBtn.addEventListener('click', refreshPorts);
 
-document.getElementById('connectBtn').addEventListener('click', async () => {
+const connectBtn = document.getElementById('connectBtn');
+if (connectBtn) connectBtn.addEventListener('click', async () => {
   const status = await (await fetch('/api/status')).json();
   if (status.connected){
     await fetch('/api/disconnect', {method:'POST'});
@@ -597,7 +603,13 @@ document.getElementById('connectBtn').addEventListener('click', async () => {
   refreshStatus();
 });
 
-document.getElementById('shutdownBtn').addEventListener('click', () => openPowerModal());
+const shutdownBtn = document.getElementById('shutdownBtn');
+if (shutdownBtn) shutdownBtn.addEventListener('click', () => openPowerModal());
+const devLogoutBtn = document.getElementById('devLogoutBtn');
+if (devLogoutBtn) devLogoutBtn.addEventListener('click', async () => {
+  try { await fetch('/api/developer/logout', {method:'POST'}); } catch (e) {}
+  window.location.href = '/';
+});
 
 const powerModal = document.getElementById('powerModal');
 function openPowerModal(){
@@ -889,69 +901,11 @@ document.addEventListener('click', (e) => {
 
 refreshPorts();
 refreshStatus();
-loadCalibration();
+if (calibrationModal) loadCalibration();
 setInterval(() => { refreshPorts(); refreshStatus(); }, 2000);
 """
 
-def render_page(active, body, page_script, extra_body="", full_height=False):
-    return f"""
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta http-equiv="Cache-Control" content="no-store">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>ShrimpSense</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/admin-lte@3.2.0/dist/css/adminlte.min.css">
-{PAGE_STYLE}
-</head>
-<body class="hold-transition layout-top-nav">
-<div class="wrapper">
-
-  <nav class="main-header navbar navbar-expand navbar-white navbar-light border-bottom px-2 shadow-sm">
-    <div class="container-fluid">
-      <ul class="navbar-nav align-items-center">
-        {render_nav_links(active)}
-        <li class="nav-item ml-2">
-          <button id="calibrationBtn" class="btn btn-outline-secondary btn-sm mr-1 font-weight-bold text-dark">Calibration</button>
-          <button id="roiBtn" class="btn btn-outline-secondary btn-sm font-weight-bold text-dark">ROI</button>
-        </li>
-      </ul>
-
-      <ul class="navbar-nav ml-auto align-items-center flex-nowrap">
-        <li class="nav-item px-1">
-          <select id="portSelect" class="custom-select custom-select-sm text-dark font-weight-bold" style="width:auto;"></select>
-        </li>
-        <li class="nav-item px-1">
-          <button id="refreshBtn" class="btn btn-sm btn-outline-secondary text-dark font-weight-bold" title="Refresh ports">&#8635;</button>
-        </li>
-        <li class="nav-item px-1">
-          <button id="connectBtn" class="btn btn-sm btn-success font-weight-bold">Connect</button>
-        </li>
-        <li class="nav-item px-2 d-flex align-items-center">
-          <span id="statusDot" class="status-dot"></span>
-          <small id="statusText" class="text-dark font-weight-bold d-none d-md-inline">Disconnected</small>
-        </li>
-        <li class="nav-item px-1">
-          <button id="shutdownBtn" class="btn btn-sm btn-outline-danger font-weight-bold" title="Power">&#9211; Power</button>
-        </li>
-      </ul>
-    </div>
-  </nav>
-
-  <div class="content-wrapper">
-    <div class="content pt-1 pb-2">
-      <div class="container-fluid">
-        {body}
-      </div>
-    </div>
-  </div>
-
-</div>
-
+DEV_SETTINGS_MARKUP = r"""
 <!-- Restored Original Calibration Modal -->
 <div class="modal" id="calibrationModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered">
@@ -969,7 +923,7 @@ def render_page(active, body, page_script, extra_body="", full_height=False):
         <input id="calibShrimpWeight" type="text" inputmode="none" autocomplete="off" class="form-control mb-2 text-dark font-weight-bold" placeholder="0.00333">
         <label for="calibFeederPulse" class="text-dark font-weight-bold">R2 ON / feeder duration each turn (s)</label>
         <input id="calibFeederPulse" type="text" inputmode="none" autocomplete="off" class="form-control mb-2 text-dark font-weight-bold" placeholder="5">
-        <label for="calibFlushPump" class="text-dark font-weight-bold">Flush pump duration (s)</label>
+        <label for="calibFlushPump" class="text-dark font-weight-bold">Clean pump duration (s)</label>
         <input id="calibFlushPump" type="text" inputmode="none" autocomplete="off" class="form-control mb-2 text-dark font-weight-bold" placeholder="10">
         <hr>
         <label for="calibScaleFactor" class="text-dark font-weight-bold">Scale factor</label>
@@ -1021,6 +975,65 @@ def render_page(active, body, page_script, extra_body="", full_height=False):
     </div>
   </div>
 </div>
+"""
+
+def render_page(active, body, page_script, extra_body="", full_height=False):
+    developer_mode = bool(session.get("developer_mode"))
+    dev_settings_markup = DEV_SETTINGS_MARKUP if developer_mode else ""
+    dev_port_controls = """<li class="nav-item px-1"><select id="portSelect" class="custom-select custom-select-sm text-dark font-weight-bold" style="width:auto;"></select></li>
+        <li class="nav-item px-1"><button id="refreshBtn" class="btn btn-sm btn-outline-secondary text-dark font-weight-bold" title="Refresh ports">&#8635;</button></li>
+        <li class="nav-item px-1"><button id="connectBtn" class="btn btn-sm btn-success font-weight-bold">Connect</button></li>""" if developer_mode else ""
+    dev_logout = """<li class="nav-item px-2"><button id="devLogoutBtn" class="btn btn-sm btn-outline-secondary font-weight-bold">Exit Developer Mode</button></li>""" if developer_mode else ""
+    dev_calibration_roi = """<li class="nav-item ml-2"><button id="calibrationBtn" class="btn btn-outline-secondary btn-sm mr-1 font-weight-bold text-dark">Calibration</button><button id="roiBtn" class="btn btn-outline-secondary btn-sm font-weight-bold text-dark">ROI</button></li>""" if developer_mode else ""
+    return f"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-store">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>ShrimpSense</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/admin-lte@3.2.0/dist/css/adminlte.min.css">
+{PAGE_STYLE}
+</head>
+<body class="hold-transition layout-top-nav">
+<div class="wrapper">
+
+  <nav class="main-header navbar navbar-expand navbar-white navbar-light border-bottom px-2 shadow-sm">
+    <div class="container-fluid">
+      <ul class="navbar-nav align-items-center">
+        {render_nav_links(active)}
+        {dev_calibration_roi}
+      </ul>
+
+      <ul class="navbar-nav ml-auto align-items-center flex-nowrap">
+        {dev_port_controls}
+        {dev_logout}
+        <li class="nav-item px-2 d-flex align-items-center">
+          <span id="statusDot" class="status-dot"></span>
+          <small id="statusText" class="text-dark font-weight-bold d-none d-md-inline">Disconnected</small>
+        </li>
+        <li class="nav-item px-1">
+          <button id="shutdownBtn" class="btn btn-sm btn-outline-danger font-weight-bold" title="Power">&#9211; Power</button>
+        </li>
+      </ul>
+    </div>
+  </nav>
+
+  <div class="content-wrapper">
+    <div class="content pt-1 pb-2">
+      <div class="container-fluid">
+        {body}
+      </div>
+    </div>
+  </div>
+
+</div>
+
+{dev_settings_markup}
 
 <!-- Restored Original Power Modal -->
 <div class="modal" id="powerModal" tabindex="-1">
@@ -2898,6 +2911,52 @@ flask_app = Flask(
     static_url_path="/assets",
 )
 
+# Developer access is PIN-protected. Set SHRIMPSENSE_DEV_PIN to a private PIN
+# before deployment; the prototype fallback is 2468 and should be changed.
+flask_app.secret_key = os.environ.get("SHRIMPSENSE_SECRET_KEY") or os.urandom(32)
+flask_app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax")
+DEVELOPER_PIN = os.environ.get("SHRIMPSENSE_DEV_PIN", "103031")
+
+@flask_app.route("/api/developer/status", methods=["GET"])
+def api_developer_status():
+    return jsonify({"ok": True, "developer_mode": bool(session.get("developer_mode"))})
+
+@flask_app.route("/api/developer/login", methods=["POST"])
+def api_developer_login():
+    data = request.get_json(silent=True) or {}
+    supplied_pin = str(data.get("pin", ""))
+    if supplied_pin != DEVELOPER_PIN:
+        return jsonify({"ok": False, "error": "Incorrect developer PIN"}), 401
+    session["developer_mode"] = True
+    session.permanent = False
+    return jsonify({"ok": True})
+
+@flask_app.route("/api/developer/logout", methods=["POST"])
+def api_developer_logout():
+    session.pop("developer_mode", None)
+    return jsonify({"ok": True})
+
+@flask_app.before_request
+def require_developer_for_technical_tools():
+    path = request.path
+    if path in ("/api/developer/login", "/api/developer/status", "/api/developer/logout"):
+        return None
+    protected_exact = {
+        "/controls", "/gallery", "/api/calibration", "/api/roi",
+        "/api/roi/reset", "/api/scale/zero", "/api/scale/calibrate",
+        "/api/ports", "/api/connect", "/api/disconnect", "/api/send",
+        "/api/live_feed", "/video_feed", "/api/developer/stats",
+        "/api/developer/record/start", "/api/developer/record/stop",
+        "/api/developer/pump", "/api/automation/durations", "/api/gallery",
+    }
+    protected_prefixes = ("/snapshots/",)
+    protected = path in protected_exact or any(path.startswith(prefix) for prefix in protected_prefixes)
+    if protected and not session.get("developer_mode"):
+        if path.startswith("/api/") or path == "/video_feed":
+            return jsonify({"ok": False, "error": "Developer access required"}), 403
+        return redirect("/")
+    return None
+
 
 def _generate_mjpeg():
     interval = 1.0 / 12
@@ -3186,7 +3245,7 @@ def api_automation_set_durations():
 @flask_app.route("/api/automation/start", methods=["POST"])
 def api_automation_start():
     if flush_mgr.is_running():
-        return jsonify({"ok": False, "error": "Flush is running"}), 400
+        return jsonify({"ok": False, "error": "Cleaning is running"}), 400
 
     data = request.get_json(silent=True) or {}
     raw_target = data.get("target_count")
@@ -3218,7 +3277,7 @@ def api_feed_status():
 @flask_app.route("/api/feed/start", methods=["POST"])
 def api_feed_start():
     if flush_mgr.is_running():
-        return jsonify({"ok": False, "error": "Flush is running"}), 400
+        return jsonify({"ok": False, "error": "Cleaning is running"}), 400
     if automation_mgr.is_running():
         return jsonify({"ok": False, "error": "Automation is running"}), 400
     if feed_mgr.is_running():
@@ -3248,6 +3307,60 @@ def api_feed_stop():
     stopped = feed_mgr.stop()
     return jsonify({"ok": True, "stopped": stopped, "status": feed_mgr.get_status()})
 
+
+_refill_lock = threading.Lock()
+_refill_timer = None
+_refill_active = False
+
+def _stop_refill_wheel():
+    global _refill_timer, _refill_active
+    with _refill_lock:
+        if _refill_timer is not None:
+            _refill_timer.cancel()
+            _refill_timer = None
+        was_active = _refill_active
+        _refill_active = False
+        if was_active:
+            try:
+                serial_mgr.send("R2OFF")
+            except Exception:
+                pass
+
+@flask_app.route("/api/refill/start", methods=["POST"])
+def api_refill_start():
+    global _refill_timer, _refill_active
+    if automation_mgr.is_running() or feed_mgr.is_running() or flush_mgr.is_running():
+        return jsonify({"ok": False, "error": "Stop counting, feeding, or cleaning before refilling"}), 400
+    with _refill_lock:
+        try:
+            serial_mgr.send("R2ON")
+        except Exception as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 500
+        _refill_active = True
+        if _refill_timer is not None:
+            _refill_timer.cancel()
+        _refill_timer = threading.Timer(2.5, _stop_refill_wheel)
+        _refill_timer.daemon = True
+        _refill_timer.start()
+    return jsonify({"ok": True, "active": True})
+
+@flask_app.route("/api/refill/keepalive", methods=["POST"])
+def api_refill_keepalive():
+    global _refill_timer
+    with _refill_lock:
+        if not _refill_active:
+            return jsonify({"ok": False, "error": "Refill wheel is not running"}), 400
+        if _refill_timer is not None:
+            _refill_timer.cancel()
+        _refill_timer = threading.Timer(2.5, _stop_refill_wheel)
+        _refill_timer.daemon = True
+        _refill_timer.start()
+    return jsonify({"ok": True, "active": True})
+
+@flask_app.route("/api/refill/stop", methods=["POST"])
+def api_refill_stop():
+    _stop_refill_wheel()
+    return jsonify({"ok": True, "active": False})
 
 @flask_app.route("/api/flush/status", methods=["GET"])
 def api_flush_status():
